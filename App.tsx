@@ -5,127 +5,113 @@
  * @format
  */
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import React, {useState} from 'react';
+import {NavigationContainer} from '@react-navigation/native';
+import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {AddBloodGlucoseScreen} from './src/screens/AddBloodGlucoseScreen';
+import {BloodGlucoseListScreen} from './src/screens/BloodGlucoseListScreen';
+import {BloodGlucoseChartScreen} from './src/screens/BloodGlucoseChartScreen';
+import {BloodGlucose} from './src/types/BloodGlucose';
+import {View, Text} from 'react-native';
+import {DatabaseService} from './src/services/database';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+type RootStackParamList = {
+  List: {
+    onDelete: (id: string) => void;
+  };
+  Add: {
+    onSave: (data: Omit<BloodGlucose, 'id'>) => void;
+  };
+  Charts: undefined;
+};
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
-
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const databaseService = new DatabaseService();
 
 function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const [isLoading, setIsLoading] = useState(true);
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  React.useEffect(() => {
+    const initDatabase = async () => {
+      try {
+        await databaseService.initDB();
+      } catch (error) {
+        console.error('Error initializing database:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initDatabase();
+  }, []);
+
+  const handleAddReading = async (data: Omit<BloodGlucose, 'id'>) => {
+    try {
+      const newReading: BloodGlucose = {
+        ...data,
+        id: Date.now().toString(),
+      };
+      await databaseService.addReading(newReading);
+    } catch (error) {
+      console.error('Error adding reading:', error);
+    }
   };
 
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the reccomendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+  const handleDeleteReading = async (id: string) => {
+    try {
+      await databaseService.deleteReading(id);
+    } catch (error) {
+      console.error('Error deleting reading:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator
+        initialRouteName="List"
+        screenOptions={{
+          headerStyle: {
+            backgroundColor: '#007AFF',
+          },
+          headerTintColor: '#fff',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}>
+        <Stack.Screen
+          name="List"
+          component={BloodGlucoseListScreen}
+          options={{
+            title: 'Blood Glucose Readings',
+          }}
+          initialParams={{onDelete: handleDeleteReading}}
+        />
+        <Stack.Screen
+          name="Add"
+          component={AddBloodGlucoseScreen}
+          options={{
+            title: 'Add Reading',
+          }}
+          initialParams={{onSave: handleAddReading}}
+        />
+        <Stack.Screen
+          name="Charts"
+          component={BloodGlucoseChartScreen}
+          options={{
+            title: 'Charts',
+          }}
+        />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
 
 export default App;
