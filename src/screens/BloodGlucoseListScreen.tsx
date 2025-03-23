@@ -6,10 +6,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
+import {HealthService} from '../services/healthService';
+import AppleHealthKit from 'react-native-health';
 
 type RootStackParamList = {
   List: {
@@ -22,11 +25,13 @@ type RootStackParamList = {
 type Props = NativeStackScreenProps<RootStackParamList, 'List'>;
 
 const databaseService = new DatabaseService();
+const healthService = HealthService.getInstance();
 
 export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const loadReadings = async () => {
     try {
@@ -43,6 +48,7 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   };
 
   useEffect(() => {
+    console.log({AppleHealthKit});
     const unsubscribe = navigation.addListener('focus', () => {
       loadReadings();
     });
@@ -56,6 +62,54 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
       await loadReadings();
     } catch (error) {
       console.error('Error deleting reading:', error);
+    }
+  };
+
+  const handleImportFromHealth = async () => {
+    try {
+      setIsImporting(true);
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 3); // Get last 3 months of data
+
+      const {healthKit, googleFit} =
+        await healthService.getAllBloodGlucoseReadings(startDate, endDate);
+
+      // Process HealthKit readings
+      for (const reading of healthKit) {
+        await databaseService.addReading({
+          id: Date.now().toString(),
+          value: reading.value,
+          unit: 'mg/dL',
+          timestamp: new Date(reading.startDate),
+          notes: 'Imported from Apple Health',
+        });
+      }
+
+      // Process Google Fit readings
+      for (const reading of googleFit) {
+        await databaseService.addReading({
+          id: Date.now().toString(),
+          value: reading.value,
+          unit: 'mg/dL',
+          timestamp: new Date(reading.date),
+          notes: `Imported from ${reading.sourceName}`,
+        });
+      }
+
+      await loadReadings();
+      Alert.alert(
+        'Import Complete',
+        `Successfully imported ${healthKit.length + googleFit.length} readings`,
+      );
+    } catch (error) {
+      console.error('Error importing health data:', error);
+      Alert.alert(
+        'Import Failed',
+        'Failed to import health data. Please try again.',
+      );
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -111,6 +165,14 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
           <Text style={styles.chartButtonText}>View Charts</Text>
         </TouchableOpacity>
       </View>
+      <TouchableOpacity
+        style={styles.importButton}
+        onPress={handleImportFromHealth}
+        disabled={isImporting}>
+        <Text style={styles.importButtonText}>
+          {isImporting ? 'Importing...' : 'Import from Health'}
+        </Text>
+      </TouchableOpacity>
       <FlatList
         data={readings}
         renderItem={renderItem}
@@ -161,6 +223,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   chartButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  importButton: {
+    backgroundColor: '#5856D6',
+    margin: 16,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  importButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
