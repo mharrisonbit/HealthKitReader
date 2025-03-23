@@ -1,3 +1,4 @@
+Built completely by AI
 # Blood Glucose Tracker
 
 A comprehensive React Native mobile application designed to help users track and manage their blood glucose readings. The app integrates with both Apple HealthKit (iOS) and Google Fit (Android) to import existing blood glucose data, while also allowing manual entry of readings. This provides a unified platform for diabetes management across different devices and platforms.
