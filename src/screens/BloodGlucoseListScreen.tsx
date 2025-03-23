@@ -12,6 +12,7 @@ import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {HealthService} from '../services/healthService';
+import AppleHealthKit from 'react-native-health';
 
 type RootStackParamList = {
   List: {
@@ -47,6 +48,7 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   };
 
   useEffect(() => {
+    console.log({AppleHealthKit});
     const unsubscribe = navigation.addListener('focus', () => {
       loadReadings();
     });

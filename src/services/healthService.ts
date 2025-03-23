@@ -41,7 +41,15 @@ export class HealthService {
     }
 
     try {
-      await AppleHealthKit.initHealthKit(healthKitOptions);
+      await new Promise((resolve, reject) => {
+        AppleHealthKit.initHealthKit(healthKitOptions, (error: string) => {
+          if (error) {
+            reject(new Error(error));
+          } else {
+            resolve(true);
+          }
+        });
+      });
       this.isHealthKitInitialized = true;
       return true;
     } catch (error) {
