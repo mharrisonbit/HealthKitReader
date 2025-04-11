@@ -1,24 +1,54 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="1242" height="2436" viewBox="0 0 1242 2436" xmlns="http://www.w3.org/2000/svg">
   <!-- Background -->
-  <rect width="1242" height="2436" fill="#E8F5E9"/>
+  <rect width="1242" height="2436" fill="#F5F5F5"/>
   
-  <!-- App Icon (larger version) -->
-  <g transform="translate(621, 800) scale(2)">
-    <!-- Background circle -->
-    <circle cx="0" cy="0" r="256" fill="#4CAF50"/>
+  <!-- Medical Cross -->
+  <g transform="translate(621, 1000)">
+    <rect x="-300" y="-300" width="600" height="600" fill="#9DD5E1" rx="20"/>
     
-    <!-- Heart shape -->
-    <path d="M0 432c-8.8 0-17.6-3.2-24.4-9.6C-55.2 396.8-256 208-256 16c0-141.2 114.8-256 256-256 70.4 0 134.4 28.8 180.8 75.2C227.2-67.2 291.2-96 361.6-96c141.2 0 256 114.8 256 256 0 192-200.8 380.8-231.6 406.4-6.8 6.4-15.6 9.6-24.4 9.6z" fill="#FFFFFF"/>
-    
-    <!-- Blood drop -->
-    <path d="M0 0c-35.2 0-64-28.8-64-64 0-35.2 64-128 64-128s64 92.8 64 128c0 35.2-28.8 64-64 64z" fill="#F44336"/>
-    <path d="M0 0c-17.6 0-32-14.4-32-32 0-17.6 32-64 32-64s32 46.4 32 64c0 17.6-14.4 32-32 32z" fill="#FFCDD2"/>
+    <!-- Rod of Asclepius -->
+    <g transform="scale(0.9)">
+      <!-- Bowl -->
+      <path d="M-120 -220 
+               Q-100 -240 -60 -240
+               Q0 -240 60 -240
+               Q100 -240 120 -220" 
+            fill="#2B5B6C"/>
+      
+      <!-- Staff -->
+      <rect x="-15" y="-220" width="30" height="440" fill="#2B5B6C"/>
+      
+      <!-- Snake -->
+      <path d="M0 -180 
+               C-80 -120, 80 -60, 0 0
+               C-80 60, 80 120, 0 180
+               L-30 220"
+            fill="none"
+            stroke="#2B5B6C"
+            stroke-width="60"
+            stroke-linecap="round"/>
+            
+      <!-- Snake Head -->
+      <path d="M-30 180
+               Q-40 200 -30 220"
+            fill="none"
+            stroke="#2B5B6C"
+            stroke-width="60"
+            stroke-linecap="round"/>
+            
+      <!-- Snake Eye -->
+      <circle cx="-45" cy="200" r="10" fill="#F5F5F5"/>
+    </g>
   </g>
   
   <!-- App Name -->
-  <text x="621" y="1200" font-family="Arial" font-size="48" text-anchor="middle" fill="#4CAF50">HealthKit Monitor</text>
+  <text x="621" y="1400" font-family="Arial-Bold, Arial" font-weight="700" font-size="72" fill="#2B5B6C" text-anchor="middle">
+    HealthKit Monitor
+  </text>
   
   <!-- Tagline -->
-  <text x="621" y="1300" font-family="Arial" font-size="24" text-anchor="middle" fill="#666666">Track your health data with ease</text>
+  <text x="621" y="1500" font-family="Arial" font-size="36" fill="#666666" text-anchor="middle">
+    Track your health data with ease
+  </text>
 </svg> 
