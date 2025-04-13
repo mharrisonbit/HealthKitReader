@@ -53,23 +53,30 @@ export class DatabaseService {
     }
   }
 
-  async addReading(reading: BloodGlucose): Promise<void> {
+  async addReading(reading: Omit<BloodGlucose, 'id'>): Promise<BloodGlucose> {
     await this.ensureInitialized();
-    if (!this.db) throw new Error('Database not initialized');
-
-    const query = `
-      INSERT INTO blood_glucose (id, value, unit, timestamp, notes)
-      VALUES (?, ?, ?, ?, ?)
-    `;
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
 
     try {
-      await this.db.executeSql(query, [
-        reading.id,
-        reading.value,
-        reading.unit,
-        reading.timestamp.toISOString(),
-        reading.notes || null,
-      ]);
+      const result = await this.db.executeSql(
+        'INSERT INTO blood_glucose (value, unit, timestamp, sourceName, notes) VALUES (?, ?, ?, ?, ?)',
+        [
+          reading.value,
+          reading.unit,
+          reading.timestamp.toISOString(),
+          reading.sourceName || 'Manual',
+          reading.notes || null,
+        ],
+      );
+
+      const insertedId = result[0].insertId;
+      return {
+        ...reading,
+        id: insertedId.toString(),
+        sourceName: reading.sourceName || 'Manual',
+      };
     } catch (error) {
       console.error('Error adding reading:', error);
       throw error;
@@ -78,48 +85,133 @@ export class DatabaseService {
 
   async getAllReadings(): Promise<BloodGlucose[]> {
     await this.ensureInitialized();
-    if (!this.db) throw new Error('Database not initialized');
-
-    const query = `
-      SELECT * FROM blood_glucose
-      ORDER BY timestamp DESC
-    `;
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
 
     try {
-      const [results] = await this.db.executeSql(query);
-      const readings: BloodGlucose[] = [];
+      const result = await this.db.executeSql(
+        'SELECT * FROM blood_glucose ORDER BY timestamp DESC',
+      );
 
-      for (let index = 0; index < results.rows.length; index++) {
-        const row = results.rows.item(index);
+      const readings: BloodGlucose[] = [];
+      for (let i = 0; i < result[0].rows.length; i++) {
+        const row = result[0].rows.item(i);
         readings.push({
-          id: row.id,
+          id: row.id.toString(),
           value: row.value,
           unit: row.unit,
           timestamp: new Date(row.timestamp),
+          sourceName: row.sourceName || 'Manual',
           notes: row.notes || undefined,
         });
       }
-
       return readings;
     } catch (error) {
-      console.error('Error getting readings:', error);
+      console.error('Error getting all readings:', error);
       throw error;
     }
   }
 
   async deleteReading(id: string): Promise<void> {
     await this.ensureInitialized();
-    if (!this.db) throw new Error('Database not initialized');
-
-    const query = `
-      DELETE FROM blood_glucose
-      WHERE id = ?
-    `;
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
 
     try {
-      await this.db.executeSql(query, [id]);
+      await this.db.executeSql('DELETE FROM blood_glucose WHERE id = ?', [id]);
     } catch (error) {
       console.error('Error deleting reading:', error);
+      throw error;
+    }
+  }
+
+  async updateReading(reading: BloodGlucose): Promise<void> {
+    await this.ensureInitialized();
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      await this.db.executeSql(
+        'UPDATE blood_glucose SET value = ?, unit = ?, timestamp = ?, sourceName = ?, notes = ? WHERE id = ?',
+        [
+          reading.value,
+          reading.unit,
+          reading.timestamp.toISOString(),
+          reading.sourceName || 'Manual',
+          reading.notes || null,
+          reading.id,
+        ],
+      );
+    } catch (error) {
+      console.error('Error updating reading:', error);
+      throw error;
+    }
+  }
+
+  async getReadingById(id: string): Promise<BloodGlucose | null> {
+    await this.ensureInitialized();
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.executeSql(
+        'SELECT * FROM blood_glucose WHERE id = ?',
+        [id],
+      );
+
+      if (result[0].rows.length === 0) {
+        return null;
+      }
+
+      const row = result[0].rows.item(0);
+      return {
+        id: row.id.toString(),
+        value: row.value,
+        unit: row.unit,
+        timestamp: new Date(row.timestamp),
+        sourceName: row.sourceName || 'Manual',
+        notes: row.notes || undefined,
+      };
+    } catch (error) {
+      console.error('Error getting reading by id:', error);
+      throw error;
+    }
+  }
+
+  async getReadingsByDateRange(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<BloodGlucose[]> {
+    await this.ensureInitialized();
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.executeSql(
+        'SELECT * FROM blood_glucose WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp DESC',
+        [startDate.toISOString(), endDate.toISOString()],
+      );
+
+      const readings: BloodGlucose[] = [];
+      for (let i = 0; i < result[0].rows.length; i++) {
+        const row = result[0].rows.item(i);
+        readings.push({
+          id: row.id.toString(),
+          value: row.value,
+          unit: row.unit,
+          timestamp: new Date(row.timestamp),
+          sourceName: row.sourceName || 'Manual',
+          notes: row.notes || undefined,
+        });
+      }
+      return readings;
+    } catch (error) {
+      console.error('Error getting readings by date range:', error);
       throw error;
     }
   }
