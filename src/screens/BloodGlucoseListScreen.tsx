@@ -78,10 +78,10 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
       // Process HealthKit readings
       for (const reading of healthKit) {
         await databaseService.addReading({
-          id: Date.now().toString(),
           value: reading.value,
           unit: 'mg/dL',
           timestamp: new Date(reading.startDate),
+          sourceName: 'Apple Health',
           notes: 'Imported from Apple Health',
         });
       }
@@ -89,11 +89,11 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
       // Process Google Fit readings
       for (const reading of googleFit) {
         await databaseService.addReading({
-          id: Date.now().toString(),
           value: reading.value,
           unit: 'mg/dL',
           timestamp: new Date(reading.date),
-          notes: `Imported from ${reading.sourceName}`,
+          sourceName: reading.sourceName || 'Google Fit',
+          notes: `Imported from ${reading.sourceName || 'Google Fit'}`,
         });
       }
 

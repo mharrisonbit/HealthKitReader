@@ -1,6 +1,20 @@
 import {Platform} from 'react-native';
 import GoogleFit, {Scopes} from 'react-native-google-fit';
-import AppleHealthKit from 'react-native-health';
+import AppleHealthKit, {
+  HealthKitPermissions,
+  HealthInputOptions,
+  HealthValue,
+  HealthValueOptions,
+} from 'react-native-health';
+import {
+  HKHealthStore,
+  HKQuantityType,
+  HKQuantityTypeIdentifier,
+  HKQuantity,
+  HKUnit,
+  HKMetricPrefix,
+  HKQuantitySample,
+} from 'react-native-healthkit';
 
 interface GoogleFitBloodGlucose {
   value: number;
@@ -20,6 +34,12 @@ export class HealthService {
   private googleFit: any;
   private isHealthKitInitialized: boolean = false;
   private isGoogleFitInitialized: boolean = false;
+  private permissions = {
+    permissions: {
+      read: [AppleHealthKit.Constants.Permissions.BloodGlucose],
+      write: [AppleHealthKit.Constants.Permissions.BloodGlucose],
+    },
+  };
 
   private constructor() {
     if (Platform.OS === 'ios') {
@@ -314,6 +334,75 @@ export class HealthService {
     } catch (error) {
       console.error('Error requesting Google Fit permissions:', error);
       return false;
+    }
+  }
+
+  async saveBloodGlucoseRangesToHealthKit(
+    low: number,
+    high: number,
+  ): Promise<void> {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+
+    const initialized = await this.initializeHealthKit();
+    if (!initialized) {
+      return;
+    }
+
+    try {
+      // Save low range
+      await AppleHealthKit.saveBloodGlucoseSample({
+        value: low,
+        startDate: new Date().toISOString(),
+        unit: AppleHealthKit.Constants.Units.BloodGlucose,
+      });
+
+      // Save high range
+      await AppleHealthKit.saveBloodGlucoseSample({
+        value: high,
+        startDate: new Date().toISOString(),
+        unit: AppleHealthKit.Constants.Units.BloodGlucose,
+      });
+    } catch (error) {
+      console.error('Error saving blood glucose ranges to HealthKit:', error);
+    }
+  }
+
+  async saveBloodGlucoseToHealthKit(value: number, date: Date): Promise<void> {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+
+    const initialized = await this.initializeHealthKit();
+    if (!initialized) {
+      return;
+    }
+
+    try {
+      // Convert mg/dL to mmol/L
+      const mmolValue = value / 18.0182;
+
+      await new Promise<void>((resolve, reject) => {
+        // @ts-ignore - The type definitions are incorrect
+        AppleHealthKit.saveBloodGlucoseSample(
+          {
+            value: mmolValue,
+            startDate: date.toISOString(),
+            unit: 'mmolPerL', // Use mmol/L as it's the standard unit in HealthKit
+          },
+          (error: string) => {
+            if (error) {
+              reject(new Error(error));
+            } else {
+              resolve();
+            }
+          },
+        );
+      });
+    } catch (error) {
+      console.error('Error saving blood glucose to HealthKit:', error);
+      throw error;
     }
   }
 }

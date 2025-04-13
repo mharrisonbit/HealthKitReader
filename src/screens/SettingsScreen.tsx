@@ -29,6 +29,7 @@ export const SettingsScreen = () => {
     high: 180,
     useCustomRanges: false,
   });
+  const [tempRanges, setTempRanges] = useState<BloodGlucoseRanges>(ranges);
 
   useEffect(() => {
     loadSettings();
@@ -39,6 +40,7 @@ export const SettingsScreen = () => {
       setIsLoading(true);
       const savedRanges = await settingsService.getRanges();
       setRanges(savedRanges);
+      setTempRanges(savedRanges);
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
@@ -46,44 +48,69 @@ export const SettingsScreen = () => {
     }
   };
 
-  const handleRangeChange = async (
-    field: keyof BloodGlucoseRanges,
-    value: string | boolean,
-  ) => {
-    const newRanges = {...ranges};
+  const handleRangeChange = (field: 'low' | 'high', value: string) => {
+    setTempRanges(prev => ({
+      ...prev,
+      [field]: value === '' ? '' : parseInt(value),
+    }));
+  };
 
-    if (field === 'useCustomRanges') {
-      newRanges[field] = value as boolean;
-    } else {
-      const stringValue = value as string;
+  const handleCustomRangesToggle = async (value: boolean) => {
+    const newRanges = {
+      ...ranges,
+      useCustomRanges: value,
+    };
+    await settingsService.setRanges(newRanges);
+    setRanges(newRanges);
+    setTempRanges(newRanges);
+  };
 
-      // Allow empty string for intermediate states while typing
-      if (stringValue === '') {
-        newRanges[field] = 0;
-        setRanges(newRanges);
-        return;
-      }
-
-      const numericValue = parseFloat(stringValue);
-
-      // Validate the new value
-      if (isNaN(numericValue)) {
-        Alert.alert('Error', 'Please enter a valid number');
-        return;
-      }
-
-      // Update the value first
-      newRanges[field] = numericValue;
-      setRanges(newRanges);
-
-      // Only validate after the value is set
-      if (newRanges.low >= newRanges.high) {
-        Alert.alert('Error', 'Low range must be less than high range');
-        return;
-      }
+  const handleSaveRanges = async () => {
+    if (tempRanges.low === '' || tempRanges.high === '') {
+      Alert.alert('Error', 'Please enter both low and high range values');
+      return;
     }
 
-    await settingsService.setRanges(newRanges);
+    const low =
+      typeof tempRanges.low === 'string'
+        ? parseInt(tempRanges.low)
+        : tempRanges.low;
+    const high =
+      typeof tempRanges.high === 'string'
+        ? parseInt(tempRanges.high)
+        : tempRanges.high;
+
+    if (isNaN(low) || isNaN(high)) {
+      Alert.alert('Error', 'Please enter valid numbers');
+      return;
+    }
+
+    if (low >= high) {
+      Alert.alert('Error', 'Low range must be less than high range');
+      return;
+    }
+
+    const newRanges = {
+      ...tempRanges,
+      low,
+      high,
+    };
+
+    try {
+      // Save to local settings
+      await settingsService.setRanges(newRanges);
+      setRanges(newRanges);
+
+      // Save to HealthKit if available
+      if (Platform.OS === 'ios') {
+        await healthService.saveBloodGlucoseRangesToHealthKit(low, high);
+      }
+
+      Alert.alert('Success', 'Ranges saved successfully');
+    } catch (error) {
+      console.error('Error saving ranges:', error);
+      Alert.alert('Error', 'Failed to save ranges');
+    }
   };
 
   const handleImportFromHealthKit = async () => {
@@ -180,37 +207,48 @@ export const SettingsScreen = () => {
           <Text style={styles.switchLabel}>Use Custom Ranges</Text>
           <Switch
             value={ranges.useCustomRanges}
-            onValueChange={value => handleRangeChange('useCustomRanges', value)}
+            onValueChange={handleCustomRangesToggle}
           />
         </View>
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Low Range (mg/dL)</Text>
-          <TextInput
-            style={[
-              styles.input,
-              !ranges.useCustomRanges && styles.disabledInput,
-            ]}
-            value={ranges.low.toString()}
-            onChangeText={value => handleRangeChange('low', value)}
-            keyboardType="numeric"
-            editable={ranges.useCustomRanges}
-            placeholder="Enter low range"
-          />
+        <View style={styles.rangeContainer}>
+          <View style={styles.rangeInput}>
+            <Text style={styles.rangeLabel}>Low Range (mg/dL):</Text>
+            <TextInput
+              style={[
+                styles.rangeValue,
+                !ranges.useCustomRanges && styles.disabledInput,
+              ]}
+              value={tempRanges.low.toString()}
+              onChangeText={text => handleRangeChange('low', text)}
+              keyboardType="numeric"
+              editable={ranges.useCustomRanges}
+              placeholder="Enter low range"
+            />
+          </View>
+          <View style={styles.rangeInput}>
+            <Text style={styles.rangeLabel}>High Range (mg/dL):</Text>
+            <TextInput
+              style={[
+                styles.rangeValue,
+                !ranges.useCustomRanges && styles.disabledInput,
+              ]}
+              value={tempRanges.high.toString()}
+              onChangeText={text => handleRangeChange('high', text)}
+              keyboardType="numeric"
+              editable={ranges.useCustomRanges}
+              placeholder="Enter high range"
+            />
+          </View>
         </View>
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>High Range (mg/dL)</Text>
-          <TextInput
-            style={[
-              styles.input,
-              !ranges.useCustomRanges && styles.disabledInput,
-            ]}
-            value={ranges.high.toString()}
-            onChangeText={value => handleRangeChange('high', value)}
-            keyboardType="numeric"
-            editable={ranges.useCustomRanges}
-            placeholder="Enter high range"
-          />
-        </View>
+        {ranges.useCustomRanges && (
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={handleSaveRanges}>
+              <Text style={styles.saveButtonText}>Save Ranges</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -320,5 +358,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     borderColor: '#ddd',
     color: '#666',
+  },
+  rangeContainer: {
+    gap: 16,
+  },
+  rangeInput: {
+    marginBottom: 8,
+  },
+  rangeLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#333',
+  },
+  rangeValue: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#fff',
+    fontSize: 16,
+  },
+  buttonContainer: {
+    marginTop: 16,
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    width: '100%',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });

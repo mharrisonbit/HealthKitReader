@@ -9,6 +9,7 @@ import {
   Alert,
   TextInput,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import {LineChart} from 'react-native-chart-kit';
 import {HealthService} from '../services/healthService';
@@ -77,18 +78,19 @@ export const HomeScreen = () => {
           databaseService.getAllReadings(),
         ]);
 
+      console.log('Database readings:', databaseReadings);
+      console.log('HealthKit readings:', healthKitReadings);
+      console.log('Google Fit readings:', googleFitReadings);
+
       // Format database readings to ensure date is a string
       const formattedDatabaseReadings = databaseReadings.map(
         (reading: BloodGlucose) => ({
-          value: reading.value,
-          date: reading.timestamp.toISOString(),
-          sourceName: 'Manual Entry',
-          id: reading.id,
-          unit: reading.unit,
-          timestamp: reading.timestamp,
-          notes: reading.notes,
+          ...reading,
+          sourceName: reading.sourceName || 'Manual Entry',
         }),
       );
+
+      console.log('Formatted database readings:', formattedDatabaseReadings);
 
       // Format HealthKit readings to match the expected format and convert from mmol/L to mg/dL
       const formattedHealthKitReadings = healthKitReadings.map(reading => ({
@@ -115,6 +117,12 @@ export const HomeScreen = () => {
         googleFit: formattedGoogleFitReadings,
         database: formattedDatabaseReadings,
       });
+
+      console.log('All readings:', [
+        ...formattedHealthKitReadings,
+        ...formattedGoogleFitReadings,
+        ...formattedDatabaseReadings,
+      ]);
     } catch (error) {
       console.error('Error loading readings:', error);
       Alert.alert('Error', 'Failed to load readings');
@@ -145,11 +153,29 @@ export const HomeScreen = () => {
         ...data,
         id: Date.now().toString(),
         timestamp: new Date(),
+        sourceName: 'Manual Entry',
       };
+
+      // Save to database
       await databaseService.addReading(newReading);
+
+      // Try to save to HealthKit (only on iOS)
+      if (Platform.OS === 'ios') {
+        try {
+          await healthService.saveBloodGlucoseToHealthKit(
+            newReading.value,
+            newReading.timestamp,
+          );
+        } catch (healthKitError) {
+          console.error('Failed to save to HealthKit:', healthKitError);
+          // Don't throw the error, just log it, as the reading is saved in our database
+        }
+      }
+
       await loadReadings(); // Refresh readings after adding
     } catch (error) {
       console.error('Error adding reading:', error);
+      Alert.alert('Error', 'Failed to save reading');
     }
   };
 

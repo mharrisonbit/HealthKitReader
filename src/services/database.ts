@@ -5,6 +5,7 @@ import {BloodGlucose} from '../types/BloodGlucose';
 SQLite.enablePromise(true);
 
 const database_name = 'BloodGlucose.db';
+const database_version = 2; // Increment version for schema change
 
 export class DatabaseService {
   private db: SQLite.SQLiteDatabase | null = null;
@@ -17,6 +18,7 @@ export class DatabaseService {
       this.db = await SQLite.openDatabase({
         name: database_name,
       });
+      await this.migrateDatabase();
       await this.createTable();
       this.isInitialized = true;
       return this.db;
@@ -26,9 +28,45 @@ export class DatabaseService {
     }
   }
 
-  private async ensureInitialized() {
-    if (!this.isInitialized) {
-      await this.initDB();
+  private async migrateDatabase() {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      // Check if version table exists
+      const versionResult = await this.db.executeSql(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='version'",
+      );
+
+      let currentVersion = 1;
+      if (versionResult[0].rows.length === 0) {
+        // Create version table if it doesn't exist
+        await this.db.executeSql(
+          'CREATE TABLE IF NOT EXISTS version (version_number INTEGER PRIMARY KEY)',
+        );
+        await this.db.executeSql(
+          'INSERT INTO version (version_number) VALUES (?)',
+          [currentVersion],
+        );
+      } else {
+        // Get current version
+        const currentVersionResult = await this.db.executeSql(
+          'SELECT version_number FROM version LIMIT 1',
+        );
+        currentVersion = currentVersionResult[0].rows.item(0).version_number;
+      }
+
+      if (currentVersion < database_version) {
+        // Drop existing tables to recreate with new schema
+        await this.db.executeSql('DROP TABLE IF EXISTS blood_glucose');
+
+        // Update version number
+        await this.db.executeSql('UPDATE version SET version_number = ?', [
+          database_version,
+        ]);
+      }
+    } catch (error) {
+      console.error('Error migrating database:', error);
+      throw error;
     }
   }
 
@@ -41,6 +79,7 @@ export class DatabaseService {
         value REAL NOT NULL,
         unit TEXT NOT NULL,
         timestamp TEXT NOT NULL,
+        sourceName TEXT NOT NULL DEFAULT 'Manual Entry',
         notes TEXT
       )
     `;
@@ -53,29 +92,36 @@ export class DatabaseService {
     }
   }
 
+  private async ensureInitialized() {
+    if (!this.isInitialized) {
+      await this.initDB();
+    }
+  }
+
   async addReading(reading: Omit<BloodGlucose, 'id'>): Promise<BloodGlucose> {
     await this.ensureInitialized();
     if (!this.db) {
       throw new Error('Database not initialized');
     }
 
+    const id = Date.now().toString();
     try {
-      const result = await this.db.executeSql(
-        'INSERT INTO blood_glucose (value, unit, timestamp, sourceName, notes) VALUES (?, ?, ?, ?, ?)',
+      await this.db.executeSql(
+        'INSERT INTO blood_glucose (id, value, unit, timestamp, sourceName, notes) VALUES (?, ?, ?, ?, ?, ?)',
         [
+          id,
           reading.value,
           reading.unit,
           reading.timestamp.toISOString(),
-          reading.sourceName || 'Manual',
+          reading.sourceName || 'Manual Entry',
           reading.notes || null,
         ],
       );
 
-      const insertedId = result[0].insertId;
       return {
         ...reading,
-        id: insertedId.toString(),
-        sourceName: reading.sourceName || 'Manual',
+        id,
+        sourceName: reading.sourceName || 'Manual Entry',
       };
     } catch (error) {
       console.error('Error adding reading:', error);
@@ -102,7 +148,7 @@ export class DatabaseService {
           value: row.value,
           unit: row.unit,
           timestamp: new Date(row.timestamp),
-          sourceName: row.sourceName || 'Manual',
+          sourceName: row.sourceName || 'Manual Entry',
           notes: row.notes || undefined,
         });
       }
