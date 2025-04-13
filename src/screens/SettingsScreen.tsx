@@ -10,6 +10,10 @@ import {
   Platform,
   Linking,
   TouchableOpacity,
+  Keyboard,
+  KeyboardAvoidingView,
+  Pressable,
+  ScrollView,
 } from 'react-native';
 import {SettingsService} from '../services/settingsService';
 import {HealthService} from '../services/healthService';
@@ -186,109 +190,122 @@ export const SettingsScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
-      {Platform.OS === 'ios' && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Import Data</Text>
-          <TouchableOpacity
-            style={[styles.button, isImporting && styles.buttonDisabled]}
-            onPress={handleImportFromHealthKit}
-            disabled={isImporting}>
-            <Text style={styles.buttonText}>
-              {isImporting ? 'Importing...' : 'Import from HealthKit'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}>
+      <Pressable style={styles.container} onPress={Keyboard.dismiss}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag">
+          <View style={styles.container}>
+            {Platform.OS === 'ios' && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Import Data</Text>
+                <TouchableOpacity
+                  style={[styles.button, isImporting && styles.buttonDisabled]}
+                  onPress={handleImportFromHealthKit}
+                  disabled={isImporting}>
+                  <Text style={styles.buttonText}>
+                    {isImporting ? 'Importing...' : 'Import from HealthKit'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Blood Glucose Ranges</Text>
-        <View style={styles.switchContainer}>
-          <Text style={styles.switchLabel}>Use Custom Ranges</Text>
-          <Switch
-            value={ranges.useCustomRanges}
-            onValueChange={handleCustomRangesToggle}
-          />
-        </View>
-        <View style={styles.rangeContainer}>
-          <View style={styles.rangeInput}>
-            <Text style={styles.rangeLabel}>Low Range (mg/dL):</Text>
-            <TextInput
-              style={[
-                styles.rangeValue,
-                !ranges.useCustomRanges && styles.disabledInput,
-              ]}
-              value={tempRanges.low.toString()}
-              onChangeText={text => handleRangeChange('low', text)}
-              keyboardType="numeric"
-              editable={ranges.useCustomRanges}
-              placeholder="Enter low range"
-            />
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Blood Glucose Ranges</Text>
+              <View style={styles.switchContainer}>
+                <Text style={styles.switchLabel}>Use Custom Ranges</Text>
+                <Switch
+                  value={ranges.useCustomRanges}
+                  onValueChange={handleCustomRangesToggle}
+                />
+              </View>
+
+              {ranges.useCustomRanges && (
+                <>
+                  <View style={styles.rangeInputs}>
+                    <View style={styles.rangeInput}>
+                      <Text style={styles.rangeLabel}>Low Range (mg/dL)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={tempRanges.low?.toString() || ''}
+                        onChangeText={value => handleRangeChange('low', value)}
+                        keyboardType="numeric"
+                        placeholder="Enter low range"
+                      />
+                    </View>
+                    <View style={styles.rangeInput}>
+                      <Text style={styles.rangeLabel}>High Range (mg/dL)</Text>
+                      <TextInput
+                        style={styles.input}
+                        value={tempRanges.high?.toString() || ''}
+                        onChangeText={value => handleRangeChange('high', value)}
+                        keyboardType="numeric"
+                        placeholder="Enter high range"
+                      />
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={handleSaveRanges}>
+                    <Text style={styles.saveButtonText}>Save Ranges</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
           </View>
-          <View style={styles.rangeInput}>
-            <Text style={styles.rangeLabel}>High Range (mg/dL):</Text>
-            <TextInput
-              style={[
-                styles.rangeValue,
-                !ranges.useCustomRanges && styles.disabledInput,
-              ]}
-              value={tempRanges.high.toString()}
-              onChangeText={text => handleRangeChange('high', text)}
-              keyboardType="numeric"
-              editable={ranges.useCustomRanges}
-              placeholder="Enter high range"
-            />
-          </View>
-        </View>
-        {ranges.useCustomRanges && (
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={handleSaveRanges}>
-              <Text style={styles.saveButtonText}>Save Ranges</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </View>
+        </ScrollView>
+      </Pressable>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    padding: 12,
     backgroundColor: '#fff',
-    padding: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#333',
   },
   section: {
-    marginBottom: 24,
-    backgroundColor: '#f5f5f5',
-    padding: 16,
-    borderRadius: 8,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
   },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  inputContainer: {
     marginBottom: 12,
   },
-  settingLabel: {
-    flex: 1,
+  label: {
     fontSize: 16,
+    marginBottom: 4,
+    color: '#666',
   },
   input: {
-    height: 40,
     borderWidth: 1,
     borderColor: '#ddd',
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 10,
     fontSize: 16,
+  },
+  rangeInputs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  rangeInput: {
+    flex: 1,
   },
   button: {
     backgroundColor: '#007AFF',
@@ -296,43 +313,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  buttonDisabled: {
-    backgroundColor: '#ccc',
-  },
   buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  permissionText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
-  },
-  permissionNote: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  permissionList: {
-    marginTop: 16,
-  },
-  permissionItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  permissionLabel: {
-    fontSize: 14,
-    color: '#333',
-  },
-  permissionStatus: {
-    fontSize: 14,
-    fontWeight: '500',
+  scrollContent: {
+    flexGrow: 1,
   },
   switchContainer: {
     flexDirection: 'row',
@@ -345,54 +332,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
   },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  disabledInput: {
-    backgroundColor: '#f5f5f5',
-    borderColor: '#ddd',
-    color: '#666',
-  },
-  rangeContainer: {
-    gap: 16,
-  },
-  rangeInput: {
-    marginBottom: 8,
-  },
   rangeLabel: {
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 8,
     color: '#333',
   },
-  rangeValue: {
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    backgroundColor: '#fff',
-    fontSize: 16,
-  },
-  buttonContainer: {
-    marginTop: 16,
-  },
   saveButton: {
     backgroundColor: '#007AFF',
     padding: 12,
     borderRadius: 8,
-    width: '100%',
+    alignItems: 'center',
   },
   saveButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-    textAlign: 'center',
+  },
+  buttonDisabled: {
+    backgroundColor: '#ccc',
   },
 });

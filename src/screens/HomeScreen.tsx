@@ -10,6 +10,10 @@ import {
   TextInput,
   useWindowDimensions,
   Platform,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import {LineChart} from 'react-native-chart-kit';
 import {HealthService} from '../services/healthService';
@@ -48,7 +52,7 @@ export const HomeScreen = () => {
     googleFit: [],
     database: [],
   });
-  const [_ranges, setRanges] = useState<BloodGlucoseRanges>({
+  const [ranges, setRanges] = useState<BloodGlucoseRanges>({
     low: 70,
     high: 180,
     useCustomRanges: false,
@@ -140,9 +144,10 @@ export const HomeScreen = () => {
     loadSettings();
   }, []);
 
-  // Use useFocusEffect to reload data when screen comes into focus
+  // Add effect to reload settings when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
+      loadSettings();
       loadReadings();
     }, []),
   );
@@ -210,15 +215,12 @@ export const HomeScreen = () => {
   };
 
   const getColorForValue = (value: number): string => {
-    const range = settingsService.getRangeForValue(value);
-    switch (range) {
-      case 'low':
-        return '#ff6b6b'; // Red for low
-      case 'high':
-        return '#ff6b6b'; // Red for high
-      default:
-        return '#4CAF50'; // Green for normal
+    if (value < ranges.low) {
+      return '#ff6b6b'; // Red for low
+    } else if (value > ranges.high) {
+      return '#ff6b6b'; // Red for high
     }
+    return '#4CAF50'; // Green for normal
   };
 
   const calculateA1C = (readings: Array<{value: number}>) => {
@@ -319,8 +321,8 @@ export const HomeScreen = () => {
     withVerticalLines: false,
     withHorizontalLines: true,
     bezier: true,
-    minValue: _ranges.low - 20, // Add some padding below the low range
-    maxValue: _ranges.high + 20, // Add some padding above the high range
+    minValue: ranges.low - 20, // Add some padding below the low range
+    maxValue: ranges.high + 20, // Add some padding above the high range
     backgroundGradientFrom: '#ff6b6b',
     backgroundGradientTo: '#4CAF50',
     backgroundGradientFromOpacity: 0.2,
@@ -328,9 +330,9 @@ export const HomeScreen = () => {
     backgroundGradientFromOffset: 0,
     backgroundGradientToOffset: 1,
     backgroundGradientFromStop:
-      (_ranges.high - _ranges.low) / (_ranges.high + 20 - (_ranges.low - 20)),
+      (ranges.high - ranges.low) / (ranges.high + 20 - (ranges.low - 20)),
     backgroundGradientToStop:
-      (_ranges.high - _ranges.low) / (_ranges.high + 20 - (_ranges.low - 20)),
+      (ranges.high - ranges.low) / (ranges.high + 20 - (ranges.low - 20)),
     width: isLandscape ? width - 32 : 350,
     height: isLandscape ? height - 100 : 220,
   };
@@ -393,186 +395,222 @@ export const HomeScreen = () => {
   }
 
   return (
-    <View style={styles.container}>
-      {!isLandscape && (
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.title}>
-              A1C:{' '}
-              <Text style={{color: getA1CColor(calculateA1C(allReadings))}}>
-                {calculateA1C(allReadings) || 'N/A'}%
-              </Text>{' '}
-              <Text
-                style={[
-                  styles.subtitle,
-                  {color: getA1CColor(calculateA1C(allReadings))},
-                ]}>
-                ({getA1CStatus(calculateA1C(allReadings))})
-              </Text>
-            </Text>
-            <Text style={styles.subtitle}>
-              Average:{' '}
-              <Text
-                style={{
-                  color: getColorForValue(
-                    parseInt(calculateAverage(allReadings) || '0'),
-                  ),
-                }}>
-                {calculateAverage(allReadings) || 'N/A'} mg/dL
-              </Text>
-            </Text>
-          </View>
-          <View style={styles.headerRight}>
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.sortToggle}
-                onPress={() =>
-                  setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
-                }>
-                <Text style={styles.sortToggleText}>
-                  {sortOrder === 'desc' ? '↓' : '↑'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() =>
-                  navigation.navigate('Add', {onSave: handleAddReading})
-                }>
-                <Text style={styles.addButtonText}>+</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.settingsButton}
-                onPress={() => navigation.navigate('Settings')}>
-                <Text style={styles.settingsButtonText}>⚙️</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-
-      <View
-        style={[
-          styles.chartContainer,
-          isLandscape && styles.chartContainerLandscape,
-        ]}>
-        <LineChart
-          data={chartData}
-          width={chartConfig.width}
-          height={chartConfig.height}
-          chartConfig={chartConfig}
-          getDotColor={(dataPoint, index) => {
-            const value = allReadings[index].value;
-            const range = settingsService.getRangeForValue(value);
-            switch (range) {
-              case 'low':
-                return '#ff6b6b'; // Red for low
-              case 'high':
-                return '#ff6b6b'; // Red for high
-              default:
-                return '#4CAF50'; // Green for normal
-            }
-          }}
-          onDataPointClick={handlePointPress}
-          bezier
-          style={styles.chart}
-          withVerticalLines={false}
-          withHorizontalLines={true}
-          segments={5}
-          fromZero={false}
-          yAxisInterval={1}
-          yAxisLabel="mg/dL"
-          xLabelsOffset={-10}
-          yLabelsOffset={10}
-        />
-        <View style={styles.legendContainer}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, {backgroundColor: '#4CAF50'}]} />
-            <Text style={styles.legendText}>Normal</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, {backgroundColor: '#ff6b6b'}]} />
-            <Text style={styles.legendText}>High/Low</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendColor, {backgroundColor: '#808080'}]} />
-            <Text style={styles.legendText}>Average</Text>
-          </View>
-        </View>
-      </View>
-
-      {!isLandscape && (
-        <View style={styles.readingsSection}>
-          <Text style={styles.sectionTitle}>Recent Readings</Text>
-          <ScrollView style={styles.readingsList}>
-            {allReadings.length > 0 ? (
-              allReadings.map((reading, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={[
-                    styles.readingItem,
-                    {borderLeftColor: getColorForValue(reading.value)},
-                  ]}
-                  onPress={() => handleReadingPress(reading)}>
-                  <View style={styles.readingContent}>
-                    <Text style={styles.readingValue}>
-                      {reading.value} mg/dL
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}>
+      <Pressable style={styles.container} onPress={Keyboard.dismiss}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag">
+          <View style={styles.container}>
+            {!isLandscape && (
+              <View style={styles.header}>
+                <View style={styles.headerLeft}>
+                  <Text style={styles.title}>
+                    A1C:{' '}
+                    <Text
+                      style={{color: getA1CColor(calculateA1C(allReadings))}}>
+                      {calculateA1C(allReadings) || 'N/A'}%
+                    </Text>{' '}
+                    <Text
+                      style={[
+                        styles.subtitle,
+                        {color: getA1CColor(calculateA1C(allReadings))},
+                      ]}>
+                      ({getA1CStatus(calculateA1C(allReadings))})
                     </Text>
-                    <Text style={styles.readingDate}>
-                      {reading.timestamp.toLocaleString()}
+                  </Text>
+                  <Text style={styles.subtitle}>
+                    Average:{' '}
+                    <Text
+                      style={{
+                        color: getColorForValue(
+                          parseInt(calculateAverage(allReadings) || '0'),
+                        ),
+                      }}>
+                      {calculateAverage(allReadings) || 'N/A'} mg/dL
                     </Text>
-                    <Text style={styles.readingSource}>
-                      {reading.sourceName}
-                    </Text>
-                    {reading.notes && (
-                      <Text style={styles.readingNotes} numberOfLines={1}>
-                        {reading.notes}
+                  </Text>
+                </View>
+                <View style={styles.headerRight}>
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity
+                      style={styles.sortToggle}
+                      onPress={() =>
+                        setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+                      }>
+                      <Text style={styles.sortToggleText}>
+                        {sortOrder === 'desc' ? '↓' : '↑'}
                       </Text>
-                    )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.addButton}
+                      onPress={() =>
+                        navigation.navigate('Add', {onSave: handleAddReading})
+                      }>
+                      <Text style={styles.addButtonText}>+</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.settingsButton}
+                      onPress={() => navigation.navigate('Settings')}>
+                      <Text style={styles.settingsButtonText}>⚙️</Text>
+                    </TouchableOpacity>
                   </View>
-                  {reading.sourceName === 'Manual Entry' && (
-                    <View style={styles.readingActions}>
-                      <TouchableOpacity
-                        style={styles.editButton}
-                        onPress={() => handleEditReading(reading)}>
-                        <Text style={styles.editButtonText}>✎</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={() =>
-                          handleDeleteReading(
-                            reading.id,
-                            reading.value,
-                            reading.timestamp,
-                          )
-                        }>
-                        <Text style={styles.deleteButtonText}>×</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))
-            ) : (
-              <View style={styles.emptyState}>
-                <Text style={styles.emptyStateText}>No readings available</Text>
-                <Text style={styles.emptyStateSubtext}>
-                  Add a reading or sync with HealthKit/Google Fit
-                </Text>
+                </View>
               </View>
             )}
-          </ScrollView>
-        </View>
-      )}
 
-      {isEditing && editingReading && (
-        <View style={styles.editModal}>
-          <View style={styles.editContent}>
+            <View
+              style={[
+                styles.chartContainer,
+                isLandscape && styles.chartContainerLandscape,
+              ]}>
+              <LineChart
+                data={chartData}
+                width={chartConfig.width}
+                height={chartConfig.height}
+                chartConfig={chartConfig}
+                getDotColor={(dataPoint, index) => {
+                  const value = allReadings[index].value;
+                  const range = ranges;
+                  if (value < range.low) {
+                    return '#ff6b6b'; // Red for low
+                  } else if (value > range.high) {
+                    return '#ff6b6b'; // Red for high
+                  }
+                  return '#4CAF50'; // Green for normal
+                }}
+                onDataPointClick={handlePointPress}
+                bezier
+                style={styles.chart}
+                withVerticalLines={false}
+                withHorizontalLines={true}
+                segments={5}
+                fromZero={false}
+                yAxisInterval={1}
+                yAxisLabel="mg/dL"
+                xLabelsOffset={-10}
+                yLabelsOffset={10}
+              />
+              <View style={styles.legendContainer}>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendColor, {backgroundColor: '#4CAF50'}]}
+                  />
+                  <Text style={styles.legendText}>Normal</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendColor, {backgroundColor: '#ff6b6b'}]}
+                  />
+                  <Text style={styles.legendText}>High/Low</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendColor, {backgroundColor: '#808080'}]}
+                  />
+                  <Text style={styles.legendText}>Average</Text>
+                </View>
+              </View>
+            </View>
+
+            {!isLandscape && (
+              <View style={styles.readingsSection}>
+                <Text style={styles.sectionTitle}>Recent Readings</Text>
+                <ScrollView
+                  style={styles.readingsList}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag">
+                  {allReadings.length > 0 ? (
+                    allReadings.map((reading, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.readingItem,
+                          {borderLeftColor: getColorForValue(reading.value)},
+                        ]}
+                        onPress={() => handleReadingPress(reading)}>
+                        <View style={styles.readingContent}>
+                          <Text style={styles.readingValue}>
+                            {reading.value} mg/dL
+                          </Text>
+                          <Text style={styles.readingDate}>
+                            {reading.timestamp.toLocaleString()}
+                          </Text>
+                          <Text style={styles.readingSource}>
+                            {reading.sourceName}
+                          </Text>
+                          {reading.notes && (
+                            <Text style={styles.readingNotes} numberOfLines={1}>
+                              {reading.notes}
+                            </Text>
+                          )}
+                        </View>
+                        {reading.sourceName === 'Manual Entry' && (
+                          <View style={styles.readingActions}>
+                            <TouchableOpacity
+                              style={styles.editButton}
+                              onPress={() => handleEditReading(reading)}>
+                              <Text style={styles.editButtonText}>✎</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.deleteButton}
+                              onPress={() =>
+                                handleDeleteReading(
+                                  reading.id,
+                                  reading.value,
+                                  reading.timestamp,
+                                )
+                              }>
+                              <Text style={styles.deleteButtonText}>×</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>
+                        No readings available
+                      </Text>
+                      <Text style={styles.emptyStateSubtext}>
+                        Add a reading or sync with HealthKit/Google Fit
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </Pressable>
+
+      <Modal
+        visible={isEditing}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          handleCancelEdit();
+        }}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            Keyboard.dismiss();
+            handleCancelEdit();
+          }}>
+          <Pressable
+            style={styles.editContent}
+            onPress={e => e.stopPropagation()}>
             <Text style={styles.editTitle}>Edit Reading</Text>
             <TextInput
               style={styles.editInput}
-              value={editingReading.value.toString()}
+              value={editingReading?.value.toString()}
               onChangeText={text => {
                 const value = parseFloat(text);
-                if (!isNaN(value)) {
+                if (!isNaN(value) && editingReading) {
                   setEditingReading({...editingReading, value});
                 }
               }}
@@ -581,9 +619,11 @@ export const HomeScreen = () => {
             />
             <TextInput
               style={[styles.editInput, {height: 100}]}
-              value={editingReading.notes || ''}
+              value={editingReading?.notes || ''}
               onChangeText={text => {
-                setEditingReading({...editingReading, notes: text});
+                if (editingReading) {
+                  setEditingReading({...editingReading, notes: text});
+                }
               }}
               placeholder="Notes (optional)"
               multiline
@@ -591,18 +631,24 @@ export const HomeScreen = () => {
             <View style={styles.buttonContainer}>
               <TouchableOpacity
                 style={[styles.editButton, styles.cancelButton]}
-                onPress={handleCancelEdit}>
+                onPress={() => {
+                  Keyboard.dismiss();
+                  handleCancelEdit();
+                }}>
                 <Text style={styles.editButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.editButton}
-                onPress={handleSaveEdit}>
+                onPress={() => {
+                  Keyboard.dismiss();
+                  handleSaveEdit();
+                }}>
                 <Text style={styles.editButtonText}>Save</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {selectedReading && (
         <View style={styles.popupOverlay}>
@@ -648,7 +694,7 @@ export const HomeScreen = () => {
           </View>
         </View>
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -885,10 +931,20 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   editContent: {
     backgroundColor: '#fff',
@@ -1009,5 +1065,8 @@ const styles = StyleSheet.create({
   popupContentLandscape: {
     width: '60%',
     maxWidth: 500,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
 });
