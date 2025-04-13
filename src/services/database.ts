@@ -174,10 +174,13 @@ export class DatabaseService {
   }
 
   async deleteAllReadings(): Promise<void> {
+    await this.ensureInitialized();
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
     try {
-      await this.db.transaction(tx => {
-        tx.executeSql('DELETE FROM blood_glucose');
-      });
+      await this.db.executeSql('DELETE FROM blood_glucose');
     } catch (error) {
       console.error('Error deleting all readings:', error);
       throw error;
