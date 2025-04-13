@@ -15,25 +15,34 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
+import {NativeStackScreenProps} from '@react-navigation/native-stack';
+import {RootStackParamList} from '../../App';
 import {SettingsService} from '../services/settingsService';
 import {HealthService} from '../services/healthService';
-import {BloodGlucoseRanges} from '../services/settingsService';
+import {BloodGlucoseRanges} from '../types/BloodGlucoseRanges';
 import {DatabaseService} from '../services/database';
 import {BloodGlucose} from '../types/BloodGlucose';
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 const settingsService = SettingsService.getInstance();
 const healthService = HealthService.getInstance();
 const databaseService = new DatabaseService();
 
-export const SettingsScreen = () => {
+export const SettingsScreen: React.FC<Props> = ({navigation}) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
+  const [useCustomRanges, setUseCustomRanges] = useState(false);
   const [ranges, setRanges] = useState<BloodGlucoseRanges>({
     low: 70,
     high: 180,
     useCustomRanges: false,
   });
-  const [tempRanges, setTempRanges] = useState<BloodGlucoseRanges>(ranges);
+  const [tempRanges, setTempRanges] = useState<BloodGlucoseRanges>({
+    low: 70,
+    high: 180,
+    useCustomRanges: false,
+  });
 
   useEffect(() => {
     loadSettings();
@@ -45,6 +54,7 @@ export const SettingsScreen = () => {
       const savedRanges = await settingsService.getRanges();
       setRanges(savedRanges);
       setTempRanges(savedRanges);
+      setUseCustomRanges(savedRanges.useCustomRanges);
     } catch (error) {
       console.error('Error loading settings:', error);
     } finally {
@@ -60,6 +70,7 @@ export const SettingsScreen = () => {
   };
 
   const handleCustomRangesToggle = async (value: boolean) => {
+    setUseCustomRanges(value);
     const newRanges = {
       ...ranges,
       useCustomRanges: value,
@@ -98,18 +109,13 @@ export const SettingsScreen = () => {
       ...tempRanges,
       low,
       high,
+      useCustomRanges: true,
     };
 
     try {
-      // Save to local settings
       await settingsService.setRanges(newRanges);
       setRanges(newRanges);
-
-      // Save to HealthKit if available
-      if (Platform.OS === 'ios') {
-        await healthService.saveBloodGlucoseRangesToHealthKit(low, high);
-      }
-
+      setTempRanges(newRanges);
       Alert.alert('Success', 'Ranges saved successfully');
     } catch (error) {
       console.error('Error saving ranges:', error);
@@ -181,6 +187,36 @@ export const SettingsScreen = () => {
     }
   };
 
+  const handleDeleteAllData = async () => {
+    // Show warning dialog
+    Alert.alert(
+      'Delete All Data',
+      'This will permanently delete all blood glucose readings from the app. This action cannot be undone. Are you sure you want to continue?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await databaseService.deleteAllReadings();
+              Alert.alert('Success', 'All data has been deleted successfully.');
+            } catch (error) {
+              console.error('Error deleting all data:', error);
+              Alert.alert(
+                'Error',
+                'Failed to delete all data. Please try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -219,12 +255,12 @@ export const SettingsScreen = () => {
               <View style={styles.switchContainer}>
                 <Text style={styles.switchLabel}>Use Custom Ranges</Text>
                 <Switch
-                  value={ranges.useCustomRanges}
+                  value={useCustomRanges}
                   onValueChange={handleCustomRangesToggle}
                 />
               </View>
 
-              {ranges.useCustomRanges && (
+              {useCustomRanges && (
                 <>
                   <View style={styles.rangeInputs}>
                     <View style={styles.rangeInput}>
@@ -255,6 +291,15 @@ export const SettingsScreen = () => {
                   </TouchableOpacity>
                 </>
               )}
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Danger Zone</Text>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={handleDeleteAllData}>
+                <Text style={styles.deleteButtonText}>Delete All Data</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
@@ -351,5 +396,17 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: '#ccc',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

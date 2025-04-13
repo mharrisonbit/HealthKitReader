@@ -72,11 +72,59 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
       const startDate = new Date();
       startDate.setMonth(startDate.getMonth() - 3); // Get last 3 months of data
 
+      console.tron.log('Starting health data import', {startDate, endDate});
+
       const {healthKit, googleFit} =
         await healthService.getAllBloodGlucoseReadings(startDate, endDate);
 
+      console.tron.log('Retrieved health data', {
+        healthKitCount: healthKit.length,
+        googleFitCount: googleFit.length,
+      });
+
+      // Get existing readings from our database
+      const existingReadings = await databaseService.getAllReadings();
+
+      console.tron.log('Existing readings count', existingReadings.length);
+
+      // Create a map of existing readings for quick lookup
+      // Use a 5-minute window to account for slight time differences
+      const existingReadingsMap = new Map(
+        existingReadings.map(reading => [
+          `${Math.floor(reading.timestamp.getTime() / (5 * 60 * 1000))}_${
+            reading.value
+          }`,
+          reading,
+        ]),
+      );
+
+      let importedCount = 0;
+      let duplicateCount = 0;
+      let skippedAppOriginalsCount = 0;
+
       // Process HealthKit readings
       for (const reading of healthKit) {
+        const readingTime = new Date(reading.startDate).getTime();
+        const timeWindow = Math.floor(readingTime / (5 * 60 * 1000));
+        const readingKey = `${timeWindow}_${reading.value}`;
+
+        // Check if this reading already exists in our database
+        const existingReading = existingReadingsMap.get(readingKey);
+
+        if (existingReading) {
+          // If the reading exists and was originally from our app, skip it
+          if (
+            existingReading.sourceName === 'App' ||
+            existingReading.sourceName === 'Manual Entry'
+          ) {
+            skippedAppOriginalsCount++;
+            continue;
+          }
+          duplicateCount++;
+          continue;
+        }
+
+        // Only import if we don't already have this reading
         await databaseService.addReading({
           value: reading.value,
           unit: 'mg/dL',
@@ -84,10 +132,32 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
           sourceName: 'Apple Health',
           notes: 'Imported from Apple Health',
         });
+        importedCount++;
       }
 
       // Process Google Fit readings
       for (const reading of googleFit) {
+        const readingTime = new Date(reading.date).getTime();
+        const timeWindow = Math.floor(readingTime / (5 * 60 * 1000));
+        const readingKey = `${timeWindow}_${reading.value}`;
+
+        // Check if this reading already exists in our database
+        const existingReading = existingReadingsMap.get(readingKey);
+
+        if (existingReading) {
+          // If the reading exists and was originally from our app, skip it
+          if (
+            existingReading.sourceName === 'App' ||
+            existingReading.sourceName === 'Manual Entry'
+          ) {
+            skippedAppOriginalsCount++;
+            continue;
+          }
+          duplicateCount++;
+          continue;
+        }
+
+        // Only import if we don't already have this reading
         await databaseService.addReading({
           value: reading.value,
           unit: 'mg/dL',
@@ -95,14 +165,23 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
           sourceName: reading.sourceName || 'Google Fit',
           notes: `Imported from ${reading.sourceName || 'Google Fit'}`,
         });
+        importedCount++;
       }
+
+      console.tron.log('Import complete', {
+        importedCount,
+        duplicateCount,
+        skippedAppOriginalsCount,
+        totalProcessed: healthKit.length + googleFit.length,
+      });
 
       await loadReadings();
       Alert.alert(
         'Import Complete',
-        `Successfully imported ${healthKit.length + googleFit.length} readings`,
+        `Successfully imported ${importedCount} new readings\n${duplicateCount} duplicates were skipped\n${skippedAppOriginalsCount} app-originated readings were skipped`,
       );
     } catch (error) {
+      console.tron.error('Error importing health data:', error);
       console.error('Error importing health data:', error);
       Alert.alert(
         'Import Failed',

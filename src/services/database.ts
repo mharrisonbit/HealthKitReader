@@ -173,6 +173,17 @@ export class DatabaseService {
     }
   }
 
+  async deleteAllReadings(): Promise<void> {
+    try {
+      await this.db.transaction(tx => {
+        tx.executeSql('DELETE FROM blood_glucose');
+      });
+    } catch (error) {
+      console.error('Error deleting all readings:', error);
+      throw error;
+    }
+  }
+
   async updateReading(reading: BloodGlucose): Promise<void> {
     await this.ensureInitialized();
     if (!this.db) {
