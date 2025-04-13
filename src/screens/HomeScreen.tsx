@@ -189,26 +189,6 @@ export const HomeScreen = () => {
     }
   };
 
-  const allReadings = [
-    ...readings.healthKit,
-    ...readings.googleFit,
-    ...readings.database,
-  ].sort((a, b) => {
-    const dateA = a.timestamp.getTime();
-    const dateB = b.timestamp.getTime();
-    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-  });
-
-  const chartData = {
-    labels: allReadings.map(() => ''), // Empty labels to remove dates
-    datasets: [
-      {
-        data: allReadings.map(r => r.value),
-        strokeWidth: 2,
-      },
-    ],
-  };
-
   const calculateA1C = (readings: Array<{value: number}>) => {
     if (readings.length === 0) return null;
 
@@ -241,6 +221,84 @@ export const HomeScreen = () => {
     if (a1cNum >= 6.5) return 'Diabetic';
     if (a1cNum >= 5.7) return 'Pre-Diabetic';
     return 'Normal';
+  };
+
+  const calculateAverage = (readings: Array<{value: number}>) => {
+    if (readings.length === 0) return null;
+    const sum = readings.reduce((acc, reading) => acc + reading.value, 0);
+    return (sum / readings.length).toFixed(0);
+  };
+
+  const allReadings = [
+    ...readings.healthKit,
+    ...readings.googleFit,
+    ...readings.database,
+  ].sort((a, b) => {
+    const dateA = a.timestamp.getTime();
+    const dateB = b.timestamp.getTime();
+    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+  });
+
+  const chartData = {
+    labels: allReadings.map(() => ''), // Empty labels to remove dates
+    datasets: [
+      {
+        data: allReadings.map(r => r.value),
+        strokeWidth: 2,
+      },
+      {
+        data: allReadings.map(() => {
+          const avg = calculateAverage(allReadings);
+          return avg ? parseFloat(avg) : 0;
+        }),
+        strokeWidth: 1,
+        color: (opacity = 1) => `rgba(128, 128, 128, ${opacity})`,
+        withDots: false,
+      },
+    ],
+  };
+
+  const chartConfig = {
+    backgroundColor: '#ffffff',
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+    style: {
+      borderRadius: 16,
+    },
+    propsForDots: {
+      r: '6',
+      strokeWidth: '2',
+      stroke: '#fff',
+    },
+    propsForBackgroundLines: {
+      strokeDasharray: '', // solid line
+    },
+    propsForLabels: {
+      fontSize: 10,
+    },
+    fillShadowGradient: '#4CAF50',
+    fillShadowGradientOpacity: 0.1,
+    yAxisInterval: 1,
+    fromZero: false,
+    segments: 5,
+    yAxisLabel: 'mg/dL',
+    yLabelsOffset: 10,
+    xLabelsOffset: -10,
+    withVerticalLines: false,
+    withHorizontalLines: true,
+    bezier: true,
+    minValue: _ranges.low - 20, // Add some padding below the low range
+    maxValue: _ranges.high + 20, // Add some padding above the high range
+    backgroundGradientFrom: '#ff6b6b',
+    backgroundGradientTo: '#4CAF50',
+    backgroundGradientFromOpacity: 0.2,
+    backgroundGradientToOpacity: 0.2,
+    backgroundGradientFromOffset: 0,
+    backgroundGradientToOffset: 1,
+    backgroundGradientFromStop:
+      (_ranges.high - _ranges.low) / (_ranges.high + 20 - (_ranges.low - 20)),
+    backgroundGradientToStop:
+      (_ranges.high - _ranges.low) / (_ranges.high + 20 - (_ranges.low - 20)),
   };
 
   const handleEditReading = async (reading: BloodGlucose) => {
@@ -287,14 +345,25 @@ export const HomeScreen = () => {
             A1C:{' '}
             <Text style={{color: getA1CColor(calculateA1C(allReadings))}}>
               {calculateA1C(allReadings) || 'N/A'}%
+            </Text>{' '}
+            <Text
+              style={[
+                styles.subtitle,
+                {color: getA1CColor(calculateA1C(allReadings))},
+              ]}>
+              ({getA1CStatus(calculateA1C(allReadings))})
             </Text>
           </Text>
-          <Text
-            style={[
-              styles.subtitle,
-              {color: getA1CColor(calculateA1C(allReadings))},
-            ]}>
-            {getA1CStatus(calculateA1C(allReadings))}
+          <Text style={styles.subtitle}>
+            Average:{' '}
+            <Text
+              style={{
+                color: getColorForValue(
+                  parseInt(calculateAverage(allReadings) || '0'),
+                ),
+              }}>
+              {calculateAverage(allReadings) || 'N/A'} mg/dL
+            </Text>
           </Text>
         </View>
         <View style={styles.headerRight}>
@@ -375,27 +444,7 @@ export const HomeScreen = () => {
                 data={chartData}
                 width={350}
                 height={220}
-                chartConfig={{
-                  backgroundColor: '#ffffff',
-                  backgroundGradientFrom: '#ffffff',
-                  backgroundGradientTo: '#ffffff',
-                  decimalPlaces: 0,
-                  color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                  style: {
-                    borderRadius: 16,
-                  },
-                  propsForDots: {
-                    r: '6',
-                    strokeWidth: '2',
-                    stroke: '#fff',
-                  },
-                  propsForBackgroundLines: {
-                    strokeDasharray: '', // solid line
-                  },
-                  propsForLabels: {
-                    fontSize: 10,
-                  },
-                }}
+                chartConfig={chartConfig}
                 getDotColor={(dataPoint, index) => {
                   const value = allReadings[index].value;
                   const range = settingsService.getRangeForValue(value);
@@ -431,6 +480,12 @@ export const HomeScreen = () => {
                     style={[styles.legendColor, {backgroundColor: '#ff6b6b'}]}
                   />
                   <Text style={styles.legendText}>High/Low</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View
+                    style={[styles.legendColor, {backgroundColor: '#808080'}]}
+                  />
+                  <Text style={styles.legendText}>Average</Text>
                 </View>
               </View>
             </View>

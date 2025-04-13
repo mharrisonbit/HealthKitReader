@@ -51,12 +51,38 @@ export const SettingsScreen = () => {
     value: string | boolean,
   ) => {
     const newRanges = {...ranges};
+
     if (field === 'useCustomRanges') {
       newRanges[field] = value as boolean;
     } else {
-      newRanges[field] = parseFloat(value as string);
+      const stringValue = value as string;
+
+      // Allow empty string for intermediate states while typing
+      if (stringValue === '') {
+        newRanges[field] = 0;
+        setRanges(newRanges);
+        return;
+      }
+
+      const numericValue = parseFloat(stringValue);
+
+      // Validate the new value
+      if (isNaN(numericValue)) {
+        Alert.alert('Error', 'Please enter a valid number');
+        return;
+      }
+
+      // Update the value first
+      newRanges[field] = numericValue;
+      setRanges(newRanges);
+
+      // Only validate after the value is set
+      if (newRanges.low >= newRanges.high) {
+        Alert.alert('Error', 'Low range must be less than high range');
+        return;
+      }
     }
-    setRanges(newRanges);
+
     await settingsService.setRanges(newRanges);
   };
 
@@ -149,32 +175,40 @@ export const SettingsScreen = () => {
       )}
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Default Ranges</Text>
-        <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>Low Range (mg/dL)</Text>
-          <TextInput
-            style={styles.input}
-            value={ranges.low.toString()}
-            onChangeText={text => handleRangeChange('low', text)}
-            keyboardType="numeric"
-          />
-        </View>
-
-        <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>High Range (mg/dL)</Text>
-          <TextInput
-            style={styles.input}
-            value={ranges.high.toString()}
-            onChangeText={text => handleRangeChange('high', text)}
-            keyboardType="numeric"
-          />
-        </View>
-
-        <View style={styles.settingItem}>
-          <Text style={styles.settingLabel}>Use Custom Ranges</Text>
+        <Text style={styles.sectionTitle}>Blood Glucose Ranges</Text>
+        <View style={styles.switchContainer}>
+          <Text style={styles.switchLabel}>Use Custom Ranges</Text>
           <Switch
             value={ranges.useCustomRanges}
             onValueChange={value => handleRangeChange('useCustomRanges', value)}
+          />
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Low Range (mg/dL)</Text>
+          <TextInput
+            style={[
+              styles.input,
+              !ranges.useCustomRanges && styles.disabledInput,
+            ]}
+            value={ranges.low.toString()}
+            onChangeText={value => handleRangeChange('low', value)}
+            keyboardType="numeric"
+            editable={ranges.useCustomRanges}
+            placeholder="Enter low range"
+          />
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>High Range (mg/dL)</Text>
+          <TextInput
+            style={[
+              styles.input,
+              !ranges.useCustomRanges && styles.disabledInput,
+            ]}
+            value={ranges.high.toString()}
+            onChangeText={value => handleRangeChange('high', value)}
+            keyboardType="numeric"
+            editable={ranges.useCustomRanges}
+            placeholder="Enter high range"
           />
         </View>
       </View>
@@ -210,13 +244,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   input: {
-    flex: 1,
     height: 40,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 4,
     paddingHorizontal: 8,
     backgroundColor: '#fff',
+    fontSize: 16,
   },
   button: {
     backgroundColor: '#007AFF',
@@ -261,5 +295,30 @@ const styles = StyleSheet.create({
   permissionStatus: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingVertical: 8,
+  },
+  switchLabel: {
+    fontSize: 16,
+    color: '#333',
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#333',
+  },
+  disabledInput: {
+    backgroundColor: '#f5f5f5',
+    borderColor: '#ddd',
+    color: '#666',
   },
 });
