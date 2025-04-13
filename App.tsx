@@ -18,7 +18,7 @@ import {BloodGlucose} from './src/types/BloodGlucose';
 import {View, Text} from 'react-native';
 import {DatabaseService} from './src/services/database';
 
-type RootStackParamList = {
+export type RootStackParamList = {
   Home: undefined;
   Settings: undefined;
   List: {

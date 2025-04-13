@@ -68,13 +68,13 @@ export const HomeScreen = () => {
   );
 
   const loadReadings = async () => {
-    setIsLoading(true);
     try {
-      // Get readings from the last 30 days
+      setIsLoading(true);
       const endDate = new Date();
       const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 30);
+      startDate.setMonth(startDate.getMonth() - 3); // Get last 3 months of data
 
+      // Get readings from all sources
       const [healthKitReadings, googleFitReadings, databaseReadings] =
         await Promise.all([
           healthService.getBloodGlucoseFromHealthKit(startDate, endDate),
@@ -82,54 +82,31 @@ export const HomeScreen = () => {
           databaseService.getAllReadings(),
         ]);
 
-      console.log('Database readings:', databaseReadings);
-      console.log('HealthKit readings:', healthKitReadings);
-      console.log('Google Fit readings:', googleFitReadings);
-
-      // Format database readings to ensure date is a string
-      const formattedDatabaseReadings = databaseReadings.map(
-        (reading: BloodGlucose) => ({
-          ...reading,
-          sourceName: reading.sourceName || 'Manual Entry',
-        }),
-      );
-
-      console.log('Formatted database readings:', formattedDatabaseReadings);
-
-      // Format HealthKit readings to match the expected format and convert from mmol/L to mg/dL
-      const formattedHealthKitReadings = healthKitReadings.map(reading => ({
+      // Convert HealthKit readings to our format
+      const convertedHealthKitReadings = healthKitReadings.map(reading => ({
         id: `healthkit-${reading.startDate}-${reading.value}`,
         value: Math.round(reading.value * 18.0182), // Convert mmol/L to mg/dL
         unit: 'mg/dL' as const,
         timestamp: new Date(reading.startDate),
         sourceName: 'HealthKit',
-        notes: undefined,
       }));
 
-      // Format Google Fit readings
-      const formattedGoogleFitReadings = googleFitReadings.map(reading => ({
+      // Convert Google Fit readings to our format
+      const convertedGoogleFitReadings = googleFitReadings.map(reading => ({
         id: `googlefit-${reading.date}-${reading.value}`,
         value: reading.value,
         unit: 'mg/dL' as const,
         timestamp: new Date(reading.date),
         sourceName: 'Google Fit',
-        notes: undefined,
       }));
 
       setReadings({
-        healthKit: formattedHealthKitReadings,
-        googleFit: formattedGoogleFitReadings,
-        database: formattedDatabaseReadings,
+        healthKit: convertedHealthKitReadings,
+        googleFit: convertedGoogleFitReadings,
+        database: databaseReadings,
       });
-
-      console.log('All readings:', [
-        ...formattedHealthKitReadings,
-        ...formattedGoogleFitReadings,
-        ...formattedDatabaseReadings,
-      ]);
     } catch (error) {
       console.error('Error loading readings:', error);
-      Alert.alert('Error', 'Failed to load readings');
     } finally {
       setIsLoading(false);
     }
@@ -144,10 +121,9 @@ export const HomeScreen = () => {
     loadSettings();
   }, []);
 
-  // Add effect to reload settings when screen comes into focus
+  // Load readings when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      loadSettings();
       loadReadings();
     }, []),
   );

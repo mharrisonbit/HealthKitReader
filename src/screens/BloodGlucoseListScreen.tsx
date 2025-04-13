@@ -115,7 +115,8 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
           // If the reading exists and was originally from our app, skip it
           if (
             existingReading.sourceName === 'App' ||
-            existingReading.sourceName === 'Manual Entry'
+            existingReading.sourceName === 'Manual Entry' ||
+            existingReading.sourceName === 'Manual'
           ) {
             skippedAppOriginalsCount++;
             continue;
@@ -148,7 +149,8 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
           // If the reading exists and was originally from our app, skip it
           if (
             existingReading.sourceName === 'App' ||
-            existingReading.sourceName === 'Manual Entry'
+            existingReading.sourceName === 'Manual Entry' ||
+            existingReading.sourceName === 'Manual'
           ) {
             skippedAppOriginalsCount++;
             continue;
