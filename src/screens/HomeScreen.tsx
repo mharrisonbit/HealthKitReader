@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import {LineChart} from 'react-native-chart-kit';
 import {HealthService} from '../services/healthService';
@@ -35,6 +36,8 @@ const databaseService = new DatabaseService();
 
 export const HomeScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const {width, height} = useWindowDimensions();
+  const isLandscape = width > height;
   const [readings, setReadings] = useState<{
     healthKit: BloodGlucose[];
     googleFit: BloodGlucose[];
@@ -53,6 +56,9 @@ export const HomeScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editingReading, setEditingReading] = useState<BloodGlucose | null>(
+    null,
+  );
+  const [selectedReading, setSelectedReading] = useState<BloodGlucose | null>(
     null,
   );
 
@@ -299,6 +305,8 @@ export const HomeScreen = () => {
       (_ranges.high - _ranges.low) / (_ranges.high + 20 - (_ranges.low - 20)),
     backgroundGradientToStop:
       (_ranges.high - _ranges.low) / (_ranges.high + 20 - (_ranges.low - 20)),
+    width: isLandscape ? width - 32 : 350,
+    height: isLandscape ? height - 100 : 220,
   };
 
   const handleEditReading = async (reading: BloodGlucose) => {
@@ -329,6 +337,27 @@ export const HomeScreen = () => {
     setEditingReading(null);
   };
 
+  const handleReadingPress = (reading: BloodGlucose) => {
+    setSelectedReading(reading);
+  };
+
+  const handleClosePopup = () => {
+    setSelectedReading(null);
+  };
+
+  const handlePointPress = (data: {
+    index: number;
+    value: number;
+    dataset: any;
+    x: number;
+    y: number;
+    getColor: (opacity: number) => string;
+  }) => {
+    if (isLandscape) {
+      setSelectedReading(allReadings[data.index]);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -339,59 +368,175 @@ export const HomeScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.title}>
-            A1C:{' '}
-            <Text style={{color: getA1CColor(calculateA1C(allReadings))}}>
-              {calculateA1C(allReadings) || 'N/A'}%
-            </Text>{' '}
-            <Text
-              style={[
-                styles.subtitle,
-                {color: getA1CColor(calculateA1C(allReadings))},
-              ]}>
-              ({getA1CStatus(calculateA1C(allReadings))})
-            </Text>
-          </Text>
-          <Text style={styles.subtitle}>
-            Average:{' '}
-            <Text
-              style={{
-                color: getColorForValue(
-                  parseInt(calculateAverage(allReadings) || '0'),
-                ),
-              }}>
-              {calculateAverage(allReadings) || 'N/A'} mg/dL
-            </Text>
-          </Text>
-        </View>
-        <View style={styles.headerRight}>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.sortToggle}
-              onPress={() =>
-                setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
-              }>
-              <Text style={styles.sortToggleText}>
-                {sortOrder === 'desc' ? '↓' : '↑'}
+      {!isLandscape && (
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.title}>
+              A1C:{' '}
+              <Text style={{color: getA1CColor(calculateA1C(allReadings))}}>
+                {calculateA1C(allReadings) || 'N/A'}%
+              </Text>{' '}
+              <Text
+                style={[
+                  styles.subtitle,
+                  {color: getA1CColor(calculateA1C(allReadings))},
+                ]}>
+                ({getA1CStatus(calculateA1C(allReadings))})
               </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() =>
-                navigation.navigate('Add', {onSave: handleAddReading})
-              }>
-              <Text style={styles.addButtonText}>+</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.settingsButton}
-              onPress={() => navigation.navigate('Settings')}>
-              <Text style={styles.settingsButtonText}>⚙️</Text>
-            </TouchableOpacity>
+            </Text>
+            <Text style={styles.subtitle}>
+              Average:{' '}
+              <Text
+                style={{
+                  color: getColorForValue(
+                    parseInt(calculateAverage(allReadings) || '0'),
+                  ),
+                }}>
+                {calculateAverage(allReadings) || 'N/A'} mg/dL
+              </Text>
+            </Text>
+          </View>
+          <View style={styles.headerRight}>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.sortToggle}
+                onPress={() =>
+                  setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
+                }>
+                <Text style={styles.sortToggleText}>
+                  {sortOrder === 'desc' ? '↓' : '↑'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() =>
+                  navigation.navigate('Add', {onSave: handleAddReading})
+                }>
+                <Text style={styles.addButtonText}>+</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.settingsButton}
+                onPress={() => navigation.navigate('Settings')}>
+                <Text style={styles.settingsButtonText}>⚙️</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      <View
+        style={[
+          styles.chartContainer,
+          isLandscape && styles.chartContainerLandscape,
+        ]}>
+        <LineChart
+          data={chartData}
+          width={chartConfig.width}
+          height={chartConfig.height}
+          chartConfig={chartConfig}
+          getDotColor={(dataPoint, index) => {
+            const value = allReadings[index].value;
+            const range = settingsService.getRangeForValue(value);
+            switch (range) {
+              case 'low':
+                return '#ff6b6b'; // Red for low
+              case 'high':
+                return '#ff6b6b'; // Red for high
+              default:
+                return '#4CAF50'; // Green for normal
+            }
+          }}
+          onDataPointClick={handlePointPress}
+          bezier
+          style={styles.chart}
+          withVerticalLines={false}
+          withHorizontalLines={true}
+          segments={5}
+          fromZero={false}
+          yAxisInterval={1}
+          yAxisLabel="mg/dL"
+          xLabelsOffset={-10}
+          yLabelsOffset={10}
+        />
+        <View style={styles.legendContainer}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, {backgroundColor: '#4CAF50'}]} />
+            <Text style={styles.legendText}>Normal</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, {backgroundColor: '#ff6b6b'}]} />
+            <Text style={styles.legendText}>High/Low</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendColor, {backgroundColor: '#808080'}]} />
+            <Text style={styles.legendText}>Average</Text>
           </View>
         </View>
       </View>
+
+      {!isLandscape && (
+        <View style={styles.readingsSection}>
+          <Text style={styles.sectionTitle}>Recent Readings</Text>
+          <ScrollView style={styles.readingsList}>
+            {allReadings.length > 0 ? (
+              allReadings.map((reading, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.readingItem,
+                    {borderLeftColor: getColorForValue(reading.value)},
+                  ]}
+                  onPress={() => handleReadingPress(reading)}>
+                  <View style={styles.readingContent}>
+                    <Text style={styles.readingValue}>
+                      {reading.value} mg/dL
+                    </Text>
+                    <Text style={styles.readingDate}>
+                      {reading.timestamp.toLocaleString()}
+                    </Text>
+                    <Text style={styles.readingSource}>
+                      {reading.sourceName}
+                    </Text>
+                    {reading.notes && (
+                      <Text style={styles.readingNotes} numberOfLines={1}>
+                        {reading.notes}
+                      </Text>
+                    )}
+                  </View>
+                  {reading.sourceName === 'Manual Entry' && (
+                    <View style={styles.readingActions}>
+                      <TouchableOpacity
+                        style={styles.editButton}
+                        onPress={() => handleEditReading(reading)}>
+                        <Text style={styles.editButtonText}>✎</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={() =>
+                          handleDeleteReading(
+                            reading.id,
+                            reading.value,
+                            reading.timestamp,
+                          )
+                        }>
+                        <Text style={styles.deleteButtonText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No readings available</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  Add a reading or sync with HealthKit/Google Fit
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      )}
+
       {isEditing && editingReading && (
         <View style={styles.editModal}>
           <View style={styles.editContent}>
@@ -432,121 +577,51 @@ export const HomeScreen = () => {
           </View>
         </View>
       )}
-      <ScrollView style={styles.content}>
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-          </View>
-        ) : (
-          <>
-            <View style={styles.chartContainer}>
-              <LineChart
-                data={chartData}
-                width={350}
-                height={220}
-                chartConfig={chartConfig}
-                getDotColor={(dataPoint, index) => {
-                  const value = allReadings[index].value;
-                  const range = settingsService.getRangeForValue(value);
-                  switch (range) {
-                    case 'low':
-                      return '#ff6b6b'; // Red for low
-                    case 'high':
-                      return '#ff6b6b'; // Red for high
-                    default:
-                      return '#4CAF50'; // Green for normal
-                  }
-                }}
-                bezier
-                style={styles.chart}
-                withVerticalLines={false}
-                withHorizontalLines={true}
-                segments={5}
-                fromZero={false}
-                yAxisInterval={1}
-                yAxisLabel="mg/dL"
-                xLabelsOffset={-10}
-                yLabelsOffset={10}
-              />
-              <View style={styles.legendContainer}>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#4CAF50'}]}
-                  />
-                  <Text style={styles.legendText}>Normal</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#ff6b6b'}]}
-                  />
-                  <Text style={styles.legendText}>High/Low</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#808080'}]}
-                  />
-                  <Text style={styles.legendText}>Average</Text>
-                </View>
-              </View>
-            </View>
 
-            <View style={styles.readingsContainer}>
-              <Text style={styles.sectionTitle}>Recent Readings</Text>
-              {allReadings.length > 0 ? (
-                allReadings.map((reading, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.readingItem,
-                      {borderLeftColor: getColorForValue(reading.value)},
-                    ]}>
-                    <View style={styles.readingContent}>
-                      <Text style={styles.readingValue}>
-                        {reading.value} mg/dL
-                      </Text>
-                      <Text style={styles.readingDate}>
-                        {reading.timestamp.toLocaleString()}
-                      </Text>
-                      <Text style={styles.readingSource}>
-                        {reading.sourceName}
-                      </Text>
-                    </View>
-                    {reading.sourceName === 'Manual Entry' && (
-                      <View style={styles.readingActions}>
-                        <TouchableOpacity
-                          style={styles.editButton}
-                          onPress={() => handleEditReading(reading)}>
-                          <Text style={styles.editButtonText}>✎</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          onPress={() =>
-                            handleDeleteReading(
-                              reading.id,
-                              reading.value,
-                              reading.timestamp,
-                            )
-                          }>
-                          <Text style={styles.deleteButtonText}>×</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                ))
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>
-                    No readings available
-                  </Text>
-                  <Text style={styles.emptyStateSubtext}>
-                    Add a reading or sync with HealthKit/Google Fit
-                  </Text>
-                </View>
-              )}
+      {selectedReading && (
+        <View style={styles.popupOverlay}>
+          <View
+            style={[
+              styles.popupContent,
+              isLandscape && styles.popupContentLandscape,
+            ]}>
+            <Text style={styles.popupTitle}>Reading Details</Text>
+            <View style={styles.popupInfo}>
+              <Text style={styles.popupLabel}>Value:</Text>
+              <Text
+                style={[
+                  styles.popupValue,
+                  {color: getColorForValue(selectedReading.value)},
+                ]}>
+                {selectedReading.value} mg/dL
+              </Text>
             </View>
-          </>
-        )}
-      </ScrollView>
+            <View style={styles.popupInfo}>
+              <Text style={styles.popupLabel}>Date:</Text>
+              <Text style={styles.popupValue}>
+                {selectedReading.timestamp.toLocaleString()}
+              </Text>
+            </View>
+            <View style={styles.popupInfo}>
+              <Text style={styles.popupLabel}>Source:</Text>
+              <Text style={styles.popupValue}>
+                {selectedReading.sourceName}
+              </Text>
+            </View>
+            {selectedReading.notes && (
+              <View style={styles.popupInfo}>
+                <Text style={styles.popupLabel}>Notes:</Text>
+                <Text style={styles.popupValue}>{selectedReading.notes}</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={handleClosePopup}>
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -647,8 +722,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chartContainer: {
-    alignItems: 'center',
     padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
   chart: {
     marginVertical: 8,
@@ -826,5 +903,85 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     backgroundColor: '#FF3B30',
+  },
+  readingNotes: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  popupOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  popupContent: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  popupTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+    color: '#333',
+  },
+  popupInfo: {
+    marginBottom: 12,
+  },
+  popupLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  popupValue: {
+    fontSize: 16,
+    color: '#333',
+  },
+  closeButton: {
+    backgroundColor: '#007AFF',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  readingsSection: {
+    flex: 1,
+    padding: 16,
+  },
+  readingsList: {
+    flex: 1,
+  },
+  chartContainerLandscape: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  popupContentLandscape: {
+    width: '60%',
+    maxWidth: 500,
   },
 });
