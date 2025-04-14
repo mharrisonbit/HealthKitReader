@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#F5F5F5"/>
+  
+  <!-- Medical Cross -->
+  <rect x="212" y="212" width="600" height="600" fill="#9DD5E1" rx="20"/>
+  
+  <!-- Rod of Asclepius -->
+  <g transform="translate(512, 512) scale(0.9)">
+    <!-- Bowl -->
+    <path d="M-120 -220 
+             Q-100 -240 -60 -240
+             Q0 -240 60 -240
+             Q100 -240 120 -220" 
+          fill="#2B5B6C"/>
+    
+    <!-- Staff -->
+    <rect x="-15" y="-220" width="30" height="440" fill="#2B5B6C"/>
+    
+    <!-- Snake -->
+    <path d="M0 -180 
+             C-80 -120, 80 -60, 0 0
+             C-80 60, 80 120, 0 180
+             L-30 220"
+          fill="none"
+          stroke="#2B5B6C"
+          stroke-width="60"
+          stroke-linecap="round"/>
+          
+    <!-- Snake Head -->
+    <path d="M-30 180
+             Q-40 200 -30 220"
+          fill="none"
+          stroke="#2B5B6C"
+          stroke-width="60"
+          stroke-linecap="round"/>
+          
+    <!-- Snake Eye -->
+    <circle cx="-45" cy="200" r="10" fill="#F5F5F5"/>
+  </g>
+</svg> 

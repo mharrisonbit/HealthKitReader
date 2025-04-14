@@ -3,5 +3,6 @@ export interface BloodGlucose {
   value: number;
   unit: 'mg/dL' | 'mmol/L';
   timestamp: Date;
+  sourceName: string;
   notes?: string;
 }

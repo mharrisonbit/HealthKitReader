@@ -1,13 +1,10 @@
-# Resolve react_native_pods.rb with node to allow for hoisting
-require Pod::Executable.execute_command('node', ['-p',
-  'require.resolve(
-    "react-native/scripts/react_native_pods.rb",
-    {paths: [process.argv[1]]},
-  )', __dir__]).strip
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+require_relative '../node_modules/@react-native-community/cli-platform-ios/native_modules'
 
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
+# Remove Flipper configuration
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil
   Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
@@ -17,15 +14,21 @@ end
 target 'RN_HealthKit' do
   config = use_native_modules!
 
+  # Flags change depending on the env values.
+  flags = get_default_flags()
+
   use_react_native!(
     :path => config[:reactNativePath],
-    :hermes_enabled => true,
-    :fabric_enabled => false,
+    :hermes_enabled => flags[:hermes_enabled],
+    :fabric_enabled => flags[:fabric_enabled],
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
   # Add react-native-health pod
   pod 'RNAppleHealthKit', :path => '../node_modules/react-native-health'
+  
+  # Add SQLite storage pod
+  pod 'react-native-sqlite-storage', :path => '../node_modules/react-native-sqlite-storage'
 
   post_install do |installer|
     react_native_post_install(
@@ -34,17 +37,31 @@ target 'RN_HealthKit' do
       :mac_catalyst_enabled => false
     )
     
-    # Enable HealthKit capabilities
+    # Set deployment target and C++ settings
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |config|
-        config.build_settings['ENABLE_BITCODE'] = 'NO'
-        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
         
-        # Add HealthKit capability
-        if target.name == 'RN_HealthKit'
-          target.add_system_framework('HealthKit')
-        end
+        # Add C++ standard library settings
+        config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++20'
+        config.build_settings['CLANG_CXX_LIBRARY'] = 'libc++'
+        config.build_settings['OTHER_CPLUSPLUSFLAGS'] = [
+          '$(OTHER_CFLAGS)',
+          '-DFOLLY_NO_CONFIG',
+          '-DFOLLY_MOBILE=1',
+          '-DFOLLY_USE_LIBCPP=1',
+          '-DFOLLY_CFG_NO_COROUTINES=1',
+          '-DFOLLY_HAVE_CLOCK_GETTIME=1'
+        ]
       end
+    end
+
+    # Enable HealthKit capabilities
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)']
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] << 'HAVE_HEALTHKIT=1'
+      config.build_settings['OTHER_LDFLAGS'] ||= ['$(inherited)']
+      config.build_settings['OTHER_LDFLAGS'] << '-framework' << 'HealthKit'
     end
   end
 end
