@@ -5,7 +5,14 @@ declare module 'reactotron-react-native' {
     warn: (...args: any[]) => void;
     debug: (...args: any[]) => void;
     clear: () => void;
+    configure: (config: {name: string; host: string}) => Reactotron;
+    setAsyncStorageHandler: (handler: any) => Reactotron;
+    useReactNative: () => Reactotron;
+    connect: () => Reactotron;
   }
+
+  const Reactotron: Reactotron;
+  export default Reactotron;
 }
 
 declare global {

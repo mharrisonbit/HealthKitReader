@@ -69,6 +69,7 @@ export const HomeScreen = () => {
 
   const loadReadings = async () => {
     try {
+      console.log('Loading readings...');
       setIsLoading(true);
       const endDate = new Date();
       const startDate = new Date();

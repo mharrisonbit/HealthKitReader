@@ -38,17 +38,18 @@ function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
   React.useEffect(() => {
+    console.tron.log('App component mounted');
     const initDatabase = async () => {
       try {
-        console.log('Initializing database...');
+        console.tron.log('Initializing database...');
         await databaseService.initDB();
-        console.log('Database initialized successfully');
+        console.tron.log('Database initialized successfully');
         setError(null);
       } catch (error) {
-        console.error('Error initializing database:', error);
+        console.tron.error('Error initializing database:', error);
         setError('Failed to initialize database. Please restart the app.');
       } finally {
-        console.log('Setting loading state to false');
+        console.tron.log('Setting loading state to false');
         setIsLoading(false);
       }
     };
