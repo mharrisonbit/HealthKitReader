@@ -240,6 +240,56 @@ export const HomeScreen = () => {
     return (sum / readings.length).toFixed(0);
   };
 
+  const calculateReadingPercentages = (
+    readings: BloodGlucose[],
+    ranges: BloodGlucoseRanges,
+  ) => {
+    if (readings.length === 0) return {low: 0, inRange: 0, high: 0};
+
+    const {low, high} = ranges;
+    let lowCount = 0;
+    let inRangeCount = 0;
+    let highCount = 0;
+
+    readings.forEach(reading => {
+      if (reading.value < low) {
+        lowCount++;
+      } else if (reading.value > high) {
+        highCount++;
+      } else {
+        inRangeCount++;
+      }
+    });
+
+    const total = readings.length;
+    return {
+      low: Math.round((lowCount / total) * 100),
+      inRange: Math.round((inRangeCount / total) * 100),
+      high: Math.round((highCount / total) * 100),
+    };
+  };
+
+  const calculateTrend = (readings: BloodGlucose[]) => {
+    if (readings.length < 6) return 'steady'; // Need at least 6 readings to determine trend
+
+    const recentReadings = readings.slice(0, 3); // Last 3 readings
+    const previousReadings = readings.slice(3, 6); // Previous 3 readings
+
+    const recentAverage =
+      recentReadings.reduce((sum, r) => sum + r.value, 0) /
+      recentReadings.length;
+    const previousAverage =
+      previousReadings.reduce((sum, r) => sum + r.value, 0) /
+      previousReadings.length;
+
+    const difference = recentAverage - previousAverage;
+    const threshold = 5; // 5 mg/dL change threshold
+
+    if (difference > threshold) return 'up';
+    if (difference < -threshold) return 'down';
+    return 'steady';
+  };
+
   const allReadings = [
     ...readings.healthKit,
     ...readings.googleFit,
@@ -410,6 +460,57 @@ export const HomeScreen = () => {
                       {calculateAverage(allReadings) || 'N/A'} mg/dL
                     </Text>
                   </Text>
+                  {allReadings.length > 0 && (
+                    <View style={styles.percentagesContainer}>
+                      <Text style={styles.percentagesTitle}>Readings:</Text>
+                      <View style={styles.percentagesRow}>
+                        <Text style={[styles.percentage, {color: '#ff6b6b'}]}>
+                          Low:{' '}
+                          {calculateReadingPercentages(allReadings, ranges).low}
+                          %
+                        </Text>
+                        <Text style={[styles.percentage, {color: '#4CAF50'}]}>
+                          In Range:{' '}
+                          {
+                            calculateReadingPercentages(allReadings, ranges)
+                              .inRange
+                          }
+                          %
+                        </Text>
+                        <Text style={[styles.percentage, {color: '#ff6b6b'}]}>
+                          High:{' '}
+                          {
+                            calculateReadingPercentages(allReadings, ranges)
+                              .high
+                          }
+                          %
+                        </Text>
+                      </View>
+                      <View style={styles.trendContainer}>
+                        <Text style={styles.trendTitle}>Trend:</Text>
+                        <View style={styles.trendIndicator}>
+                          <Text
+                            style={[
+                              styles.trendText,
+                              {
+                                color:
+                                  calculateTrend(allReadings) === 'up'
+                                    ? '#ff6b6b'
+                                    : calculateTrend(allReadings) === 'down'
+                                    ? '#4CAF50'
+                                    : '#666',
+                              },
+                            ]}>
+                            {calculateTrend(allReadings) === 'up'
+                              ? '↑ Trending Up'
+                              : calculateTrend(allReadings) === 'down'
+                              ? '↓ Trending Down'
+                              : '→ Steady'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
                 </View>
                 <View style={styles.headerRight}>
                   <View style={styles.actionButtons}>
@@ -419,7 +520,7 @@ export const HomeScreen = () => {
                         setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
                       }>
                       <Text style={styles.sortToggleText}>
-                        {sortOrder === 'desc' ? '↓' : '↑'}
+                        {sortOrder === 'desc' ? 'Newest ↓' : 'Oldest ↑'}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -859,12 +960,17 @@ const styles = StyleSheet.create({
   },
   sortToggle: {
     marginLeft: 8,
-    width: 40,
+    width: 80,
+    height: 40,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sortToggleText: {
     fontSize: 14,
     color: '#666',
-    fontWeight: 'bold',
+    fontWeight: '500',
   },
   readingActions: {
     flexDirection: 'row',
@@ -1045,5 +1151,40 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+  },
+  percentagesContainer: {
+    marginTop: 8,
+  },
+  percentagesTitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  percentagesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  percentage: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  trendContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  trendTitle: {
+    fontSize: 14,
+    color: '#666',
+    marginRight: 8,
+  },
+  trendIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trendText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
