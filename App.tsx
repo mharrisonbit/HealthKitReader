@@ -38,18 +38,28 @@ function App(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
   React.useEffect(() => {
-    console.tron.log('App component mounted');
+    if (__DEV__) {
+      console.tron.log('App component mounted');
+    }
     const initDatabase = async () => {
       try {
-        console.tron.log('Initializing database...');
+        if (__DEV__) {
+          console.tron.log('Initializing database...');
+        }
         await databaseService.initDB();
-        console.tron.log('Database initialized successfully');
+        if (__DEV__) {
+          console.tron.log('Database initialized successfully');
+        }
         setError(null);
       } catch (error) {
-        console.tron.error('Error initializing database:', error);
+        if (__DEV__) {
+          console.tron.error('Error initializing database:', error);
+        }
         setError('Failed to initialize database. Please restart the app.');
       } finally {
-        console.tron.log('Setting loading state to false');
+        if (__DEV__) {
+          console.tron.log('Setting loading state to false');
+        }
         setIsLoading(false);
       }
     };
@@ -65,7 +75,9 @@ function App(): React.JSX.Element {
       };
       await databaseService.addReading(newReading);
     } catch (error) {
-      console.error('Error adding reading:', error);
+      if (__DEV__) {
+        console.error('Error adding reading:', error);
+      }
     }
   };
 
@@ -73,12 +85,16 @@ function App(): React.JSX.Element {
     try {
       await databaseService.deleteReading(id);
     } catch (error) {
-      console.error('Error deleting reading:', error);
+      if (__DEV__) {
+        console.error('Error deleting reading:', error);
+      }
     }
   };
 
   if (isLoading) {
-    console.log('Rendering loading screen');
+    if (__DEV__) {
+      console.log('Rendering loading screen');
+    }
     return (
       <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
         <Text>Loading...</Text>
@@ -87,7 +103,9 @@ function App(): React.JSX.Element {
   }
 
   if (error) {
-    console.log('Rendering error screen:', error);
+    if (__DEV__) {
+      console.log('Rendering error screen:', error);
+    }
     return (
       <View
         style={{
@@ -101,7 +119,9 @@ function App(): React.JSX.Element {
     );
   }
 
-  console.log('Rendering main app');
+  if (__DEV__) {
+    console.log('Rendering main app');
+  }
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Home">

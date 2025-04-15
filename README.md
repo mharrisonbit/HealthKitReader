@@ -101,6 +101,39 @@ A comprehensive React Native application for tracking and managing blood glucose
   - Data management options
   - User preferences
 
+### Development and Release Mode Configuration
+
+#### Development Mode Features
+
+- Reactotron integration for debugging
+- Development-only logging
+- Chrome DevTools connection
+- Detailed error tracking
+
+#### Release Mode Optimizations
+
+- All development tools disabled
+- No console logging
+- Optimized performance
+- Reactotron configuration excluded
+
+To build the app in release mode:
+
+```bash
+# For iOS
+npx react-native run-ios --configuration Release
+
+# For Android
+npx react-native run-android --variant=release
+```
+
+#### Debugging and Logging
+
+- Development mode includes Reactotron for advanced debugging
+- Console logging is automatically disabled in release builds
+- Error handling is optimized for production
+- Performance monitoring tools are development-only
+
 #### 6. Technical Features
 
 - **Development Tools**
