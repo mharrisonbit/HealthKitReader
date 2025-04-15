@@ -110,10 +110,13 @@ export const HomeScreen = () => {
               await healthService.importBloodGlucoseInBatches(
                 startDate,
                 endDate,
-                progress => {},
+                _progress => {
+                  // Empty callback for progress updates
+                },
               );
 
             if (importedCount > 0) {
+              // Reload readings to show the newly imported data
               const updatedReadings = await databaseService.getAllReadings();
               const updatedSortedReadings = updatedReadings.sort(
                 (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
@@ -121,7 +124,9 @@ export const HomeScreen = () => {
               setReadings(updatedSortedReadings.slice(0, 100));
             }
           }
-        } catch (error) {}
+        } catch (error) {
+          // Silently handle error
+        }
       }
     } catch (err) {
       setError('Failed to load readings');
@@ -147,8 +152,8 @@ export const HomeScreen = () => {
       const {importedCount} = await healthService.importBloodGlucoseInBatches(
         oldestDate,
         new Date(),
-        progress => {
-          setImportProgress(progress);
+        _progress => {
+          setImportProgress(_progress);
         },
       );
 
