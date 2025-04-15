@@ -147,14 +147,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
       // Start importing from 3 months ago
-      await healthService.getBloodGlucoseFromHealthKit(
-        threeMonthsAgo,
-        new Date(),
-      );
+      const {importedCount, duplicateCount} =
+        await healthService.importBloodGlucoseInBatches(
+          threeMonthsAgo,
+          new Date(),
+          progress => {
+            console.log('Import progress:', progress);
+          },
+        );
 
       Alert.alert(
         'Success',
-        `${serviceName} data has been successfully imported.`,
+        `Successfully imported ${importedCount} readings. ${duplicateCount} duplicates were skipped.`,
         [{text: 'OK'}],
       );
     } catch (error) {

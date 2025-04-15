@@ -104,7 +104,12 @@ export class DatabaseService {
       throw new Error('Database not initialized');
     }
 
-    const id = Date.now().toString();
+    // Generate a unique ID using timestamp, random string, and source
+    const timestamp = reading.timestamp.getTime();
+    const randomString = Math.random().toString(36).substr(2, 9);
+    const sourcePrefix = reading.sourceName.toLowerCase().replace(/\s+/g, '-');
+    const id = `${sourcePrefix}-${timestamp}-${randomString}`;
+
     try {
       await this.db.executeSql(
         'INSERT INTO blood_glucose (id, value, unit, timestamp, sourceName, notes) VALUES (?, ?, ?, ?, ?, ?)',

@@ -15,6 +15,7 @@ import {
   HKMetricPrefix,
   HKQuantitySample,
 } from 'react-native-healthkit';
+import {DatabaseService} from './database';
 
 interface GoogleFitBloodGlucose {
   value: number;
@@ -34,6 +35,7 @@ export class HealthService {
   private googleFit: any;
   private isHealthKitInitialized: boolean = false;
   private isGoogleFitInitialized: boolean = false;
+  private databaseService: DatabaseService;
   private permissions = {
     permissions: {
       read: [AppleHealthKit.Constants.Permissions.BloodGlucose],
@@ -47,6 +49,7 @@ export class HealthService {
     } else if (Platform.OS === 'android') {
       this.googleFit = require('react-native-google-fit').default;
     }
+    this.databaseService = new DatabaseService();
   }
 
   static getInstance(): HealthService {
@@ -138,15 +141,29 @@ export class HealthService {
 
     const initialized = await this.initializeHealthKit();
     if (!initialized) {
+      console.log(`[${new Date().toISOString()}] HealthKit not initialized`);
       return [];
     }
 
     try {
+      // Add 1 day buffer to ensure we don't miss entries
+      const adjustedStartDate = new Date(startDate);
+      adjustedStartDate.setDate(adjustedStartDate.getDate() - 1);
+
       const options = {
-        startDate: startDate.toISOString(),
+        startDate: adjustedStartDate.toISOString(),
         endDate: endDate.toISOString(),
         ascending: true,
       };
+
+      console.log(
+        `[${new Date().toISOString()}] Querying HealthKit with date range:`,
+        {
+          startDate: options.startDate,
+          endDate: options.endDate,
+          currentTime: new Date().toISOString(),
+        },
+      );
 
       return new Promise(resolve => {
         AppleHealthKit.getBloodGlucoseSamples(
@@ -154,24 +171,42 @@ export class HealthService {
           (error: string, samples: any[]) => {
             if (error) {
               console.error(
-                'Error getting blood glucose from HealthKit:',
+                `[${new Date().toISOString()}] Error getting blood glucose from HealthKit:`,
                 error,
               );
               resolve([]);
             } else {
-              resolve(
-                samples.map((result: any) => ({
+              console.log(
+                `[${new Date().toISOString()}] Retrieved ${
+                  samples.length
+                } samples from HealthKit`,
+              );
+              const convertedSamples = samples.map((result: any) => {
+                console.log(
+                  `[${new Date().toISOString()}] Processing sample:`,
+                  {
+                    value: result.value,
+                    startDate: result.startDate,
+                    endDate: result.endDate,
+                    sourceName: result.sourceName || 'Unknown',
+                  },
+                );
+                return {
                   value: result.value,
                   startDate: result.startDate,
                   endDate: result.endDate,
-                })),
-              );
+                };
+              });
+              resolve(convertedSamples);
             }
           },
         );
       });
     } catch (error) {
-      console.error('Error getting blood glucose from HealthKit:', error);
+      console.error(
+        `[${new Date().toISOString()}] Error getting blood glucose from HealthKit:`,
+        error,
+      );
       return [];
     }
   }
@@ -380,21 +415,24 @@ export class HealthService {
     }
 
     try {
-      // Convert mg/dL to mmol/L
-      const mmolValue = value / 18.0182;
+      console.log('Saving to HealthKit:', {
+        value: value,
+        unit: 'mg/dL',
+      });
 
       await new Promise<void>((resolve, reject) => {
-        // @ts-ignore - The type definitions are incorrect
         AppleHealthKit.saveBloodGlucoseSample(
           {
-            value: mmolValue,
+            value: value,
             startDate: date.toISOString(),
-            unit: 'mmolPerL', // Use mmol/L as it's the standard unit in HealthKit
+            unit: 'mg/dL',
           },
           (error: string) => {
             if (error) {
+              console.error('Error saving to HealthKit:', error);
               reject(new Error(error));
             } else {
+              console.log('Successfully saved to HealthKit:', value, 'mg/dL');
               resolve();
             }
           },
@@ -404,5 +442,170 @@ export class HealthService {
       console.error('Error saving blood glucose to HealthKit:', error);
       throw error;
     }
+  }
+
+  async importBloodGlucoseInBatches(
+    startDate: Date,
+    endDate: Date,
+    onProgress: (progress: {
+      currentDate: Date;
+      totalDays: number;
+      currentDay: number;
+    }) => void,
+  ): Promise<{importedCount: number; duplicateCount: number}> {
+    // Add 1 day buffer to ensure we don't miss entries
+    const adjustedStartDate = new Date(startDate);
+    adjustedStartDate.setDate(adjustedStartDate.getDate() - 1);
+
+    console.log(
+      `[${new Date().toISOString()}] Starting batch import with date range:`,
+      {
+        startDate: adjustedStartDate.toISOString(),
+        endDate: endDate.toISOString(),
+        currentTime: new Date().toISOString(),
+      },
+    );
+
+    const totalDays = Math.ceil(
+      (endDate.getTime() - adjustedStartDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    let importedCount = 0;
+    let duplicateCount = 0;
+    let currentDate = new Date(adjustedStartDate);
+
+    while (currentDate <= endDate) {
+      const batchEndDate = new Date(currentDate);
+      batchEndDate.setHours(23, 59, 59, 999);
+
+      console.log(`[${new Date().toISOString()}] Processing batch for date:`, {
+        date: currentDate.toISOString(),
+        batchEndDate: batchEndDate.toISOString(),
+      });
+
+      const {healthKit, googleFit} = await this.getAllBloodGlucoseReadings(
+        currentDate,
+        batchEndDate,
+      );
+
+      console.log(`[${new Date().toISOString()}] Retrieved readings:`, {
+        healthKitCount: healthKit.length,
+        googleFitCount: googleFit.length,
+        date: currentDate.toISOString(),
+      });
+
+      // Get existing readings from our database
+      const existingReadings = await this.databaseService.getAllReadings();
+      console.log(
+        `[${new Date().toISOString()}] Existing readings count:`,
+        existingReadings.length,
+      );
+
+      const existingReadingsMap = new Map(
+        existingReadings.map(reading => [
+          `${reading.timestamp.getTime()}_${reading.value}_${
+            reading.sourceName
+          }`,
+          reading,
+        ]),
+      );
+
+      // Process HealthKit readings
+      for (const reading of healthKit) {
+        const readingTime = new Date(reading.startDate).getTime();
+        const readingKey = `${readingTime}_${reading.value}_Apple Health`;
+
+        console.log(
+          `[${new Date().toISOString()}] Processing HealthKit reading:`,
+          {
+            value: reading.value,
+            timestamp: reading.startDate,
+            key: readingKey,
+            currentTime: new Date().toISOString(),
+          },
+        );
+
+        if (existingReadingsMap.has(readingKey)) {
+          console.log(
+            `[${new Date().toISOString()}] Skipping duplicate reading:`,
+            readingKey,
+          );
+          duplicateCount++;
+          continue;
+        }
+
+        try {
+          await this.databaseService.addReading({
+            value: reading.value,
+            unit: 'mg/dL',
+            timestamp: new Date(reading.startDate),
+            sourceName: 'Apple Health',
+            notes: 'Imported from Apple Health',
+          });
+          console.log(
+            `[${new Date().toISOString()}] Successfully imported reading:`,
+            {
+              value: reading.value,
+              timestamp: reading.startDate,
+            },
+          );
+          importedCount++;
+        } catch (error) {
+          console.error(
+            `[${new Date().toISOString()}] Error adding HealthKit reading:`,
+            error,
+          );
+        }
+      }
+
+      // Process Google Fit readings
+      for (const reading of googleFit) {
+        const readingTime = new Date(reading.date).getTime();
+        const readingKey = `${readingTime}_${reading.value}_${
+          reading.sourceName || 'Google Fit'
+        }`;
+
+        if (existingReadingsMap.has(readingKey)) {
+          duplicateCount++;
+          continue;
+        }
+
+        try {
+          await this.databaseService.addReading({
+            value: reading.value,
+            unit: 'mg/dL',
+            timestamp: new Date(reading.date),
+            sourceName: reading.sourceName || 'Google Fit',
+            notes: `Imported from ${reading.sourceName || 'Google Fit'}`,
+          });
+          importedCount++;
+        } catch (error) {
+          console.error('Error adding Google Fit reading:', error);
+          // Continue with next reading
+        }
+      }
+
+      // Update progress
+      onProgress({
+        currentDate: new Date(currentDate),
+        totalDays,
+        currentDay:
+          Math.floor(
+            (currentDate.getTime() - adjustedStartDate.getTime()) /
+              (1000 * 60 * 60 * 24),
+          ) + 1,
+      });
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    console.log(`[${new Date().toISOString()}] Import complete:`, {
+      importedCount,
+      duplicateCount,
+      totalDays,
+      endTime: new Date().toISOString(),
+    });
+
+    return {importedCount, duplicateCount};
   }
 }

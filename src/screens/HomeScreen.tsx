@@ -14,6 +14,8 @@ import {
   KeyboardAvoidingView,
   Modal,
   Pressable,
+  FlatList,
+  Button,
 } from 'react-native';
 import {LineChart} from 'react-native-chart-kit';
 import {HealthService} from '../services/healthService';
@@ -43,15 +45,7 @@ export const HomeScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const {width, height} = useWindowDimensions();
   const isLandscape = width > height;
-  const [readings, setReadings] = useState<{
-    healthKit: BloodGlucose[];
-    googleFit: BloodGlucose[];
-    database: BloodGlucose[];
-  }>({
-    healthKit: [],
-    googleFit: [],
-    database: [],
-  });
+  const [readings, setReadings] = useState<BloodGlucose[]>([]);
   const [ranges, setRanges] = useState<BloodGlucoseRanges>({
     low: 70,
     high: 180,
@@ -66,50 +60,58 @@ export const HomeScreen = () => {
   const [selectedReading, setSelectedReading] = useState<BloodGlucose | null>(
     null,
   );
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    currentDate: Date;
+    totalDays: number;
+    currentDay: number;
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const loadReadings = async () => {
     try {
-      console.log('Loading readings...');
       setIsLoading(true);
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 3); // Get last 3 months of data
-
-      // Get readings from all sources
-      const [healthKitReadings, googleFitReadings, databaseReadings] =
-        await Promise.all([
-          healthService.getBloodGlucoseFromHealthKit(startDate, endDate),
-          healthService.getBloodGlucoseFromGoogleFit(startDate, endDate),
-          databaseService.getAllReadings(),
-        ]);
-
-      // Convert HealthKit readings to our format
-      const convertedHealthKitReadings = healthKitReadings.map(reading => ({
-        id: `healthkit-${reading.startDate}-${reading.value}`,
-        value: Math.round(reading.value * 18.0182), // Convert mmol/L to mg/dL
-        unit: 'mg/dL' as const,
-        timestamp: new Date(reading.startDate),
-        sourceName: 'HealthKit',
-      }));
-
-      // Convert Google Fit readings to our format
-      const convertedGoogleFitReadings = googleFitReadings.map(reading => ({
-        id: `googlefit-${reading.date}-${reading.value}`,
-        value: reading.value,
-        unit: 'mg/dL' as const,
-        timestamp: new Date(reading.date),
-        sourceName: 'Google Fit',
-      }));
-
-      setReadings({
-        healthKit: convertedHealthKitReadings,
-        googleFit: convertedGoogleFitReadings,
-        database: databaseReadings,
-      });
-    } catch (error) {
-      console.error('Error loading readings:', error);
+      setError(null);
+      const allReadings = await databaseService.getAllReadings();
+      setReadings(allReadings);
+    } catch (err) {
+      setError('Failed to load readings');
+      console.error('Error loading readings:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleImportFromHealth = async () => {
+    try {
+      setIsImporting(true);
+      setError(null);
+
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+      const {importedCount, duplicateCount} =
+        await healthService.importBloodGlucoseInBatches(
+          threeMonthsAgo,
+          new Date(),
+          progress => {
+            setImportProgress(progress);
+          },
+        );
+
+      Alert.alert(
+        'Import Complete',
+        `Successfully imported ${importedCount} readings. ${duplicateCount} duplicates were skipped.`,
+      );
+
+      // Refresh the readings list
+      await loadReadings();
+    } catch (err) {
+      setError('Failed to import readings');
+      console.error('Error importing readings:', err);
+    } finally {
+      setIsImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -290,11 +292,7 @@ export const HomeScreen = () => {
     return 'steady';
   };
 
-  const allReadings = [
-    ...readings.healthKit,
-    ...readings.googleFit,
-    ...readings.database,
-  ].sort((a, b) => {
+  const allReadings = [...readings].sort((a, b) => {
     const dateA = a.timestamp.getTime();
     const dateB = b.timestamp.getTime();
     return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
@@ -772,6 +770,32 @@ export const HomeScreen = () => {
           </View>
         </View>
       )}
+
+      {isImporting && importProgress && (
+        <View style={styles.importProgress}>
+          <Text style={styles.importProgressText}>
+            Importing data for {importProgress.currentDate.toLocaleDateString()}
+          </Text>
+          <Text style={styles.importProgressText}>
+            Progress: {importProgress.currentDay} of {importProgress.totalDays}{' '}
+            days
+          </Text>
+        </View>
+      )}
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      <View style={styles.footer}>
+        <Button
+          title="Import from Health"
+          onPress={handleImportFromHealth}
+          disabled={isImporting}
+        />
+      </View>
     </KeyboardAvoidingView>
   );
 };
@@ -1186,5 +1210,30 @@ const styles = StyleSheet.create({
   trendText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  importProgress: {
+    backgroundColor: '#f0f0f0',
+    padding: 10,
+    alignItems: 'center',
+  },
+  importProgressText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  errorContainer: {
+    backgroundColor: '#ff6b6b',
+    padding: 10,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  footer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
   },
 });
