@@ -448,166 +448,111 @@ export class HealthService {
   async importBloodGlucoseInBatches(
     startDate: Date,
     endDate: Date,
-    onProgress: (progress: {
+    onProgress?: (progress: {
       currentDate: Date;
       totalDays: number;
       currentDay: number;
     }) => void,
-  ): Promise<{importedCount: number; duplicateCount: number}> {
-    // Add 1 day buffer to ensure we don't miss entries
-    const adjustedStartDate = new Date(startDate);
-    adjustedStartDate.setDate(adjustedStartDate.getDate() - 1);
-
-    console.log(
-      `[${new Date().toISOString()}] Starting batch import with date range:`,
-      {
-        startDate: adjustedStartDate.toISOString(),
-        endDate: endDate.toISOString(),
-        currentTime: new Date().toISOString(),
-      },
-    );
-
-    const totalDays = Math.ceil(
-      (endDate.getTime() - adjustedStartDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    let importedCount = 0;
-    let duplicateCount = 0;
-    let currentDate = new Date(adjustedStartDate);
-
-    while (currentDate <= endDate) {
-      const batchEndDate = new Date(currentDate);
-      batchEndDate.setHours(23, 59, 59, 999);
-
-      console.log(`[${new Date().toISOString()}] Processing batch for date:`, {
-        date: currentDate.toISOString(),
-        batchEndDate: batchEndDate.toISOString(),
-      });
-
-      const {healthKit, googleFit} = await this.getAllBloodGlucoseReadings(
-        currentDate,
-        batchEndDate,
-      );
-
-      console.log(`[${new Date().toISOString()}] Retrieved readings:`, {
-        healthKitCount: healthKit.length,
-        googleFitCount: googleFit.length,
-        date: currentDate.toISOString(),
-      });
-
-      // Get existing readings from our database
-      const existingReadings = await this.databaseService.getAllReadings();
-      console.log(
-        `[${new Date().toISOString()}] Existing readings count:`,
-        existingReadings.length,
-      );
-
-      const existingReadingsMap = new Map(
-        existingReadings.map(reading => [
-          `${reading.timestamp.getTime()}_${reading.value}_${
-            reading.sourceName
-          }`,
-          reading,
-        ]),
-      );
-
-      // Process HealthKit readings
-      for (const reading of healthKit) {
-        const readingTime = new Date(reading.startDate).getTime();
-        const readingKey = `${readingTime}_${reading.value}_Apple Health`;
-
-        console.log(
-          `[${new Date().toISOString()}] Processing HealthKit reading:`,
-          {
-            value: reading.value,
-            timestamp: reading.startDate,
-            key: readingKey,
-            currentTime: new Date().toISOString(),
-          },
-        );
-
-        if (existingReadingsMap.has(readingKey)) {
-          console.log(
-            `[${new Date().toISOString()}] Skipping duplicate reading:`,
-            readingKey,
-          );
-          duplicateCount++;
-          continue;
-        }
-
-        try {
-          await this.databaseService.addReading({
-            value: reading.value,
-            unit: 'mg/dL',
-            timestamp: new Date(reading.startDate),
-            sourceName: 'Apple Health',
-            notes: 'Imported from Apple Health',
-          });
-          console.log(
-            `[${new Date().toISOString()}] Successfully imported reading:`,
-            {
-              value: reading.value,
-              timestamp: reading.startDate,
-            },
-          );
-          importedCount++;
-        } catch (error) {
-          console.error(
-            `[${new Date().toISOString()}] Error adding HealthKit reading:`,
-            error,
-          );
-        }
-      }
-
-      // Process Google Fit readings
-      for (const reading of googleFit) {
-        const readingTime = new Date(reading.date).getTime();
-        const readingKey = `${readingTime}_${reading.value}_${
-          reading.sourceName || 'Google Fit'
-        }`;
-
-        if (existingReadingsMap.has(readingKey)) {
-          duplicateCount++;
-          continue;
-        }
-
-        try {
-          await this.databaseService.addReading({
-            value: reading.value,
-            unit: 'mg/dL',
-            timestamp: new Date(reading.date),
-            sourceName: reading.sourceName || 'Google Fit',
-            notes: `Imported from ${reading.sourceName || 'Google Fit'}`,
-          });
-          importedCount++;
-        } catch (error) {
-          console.error('Error adding Google Fit reading:', error);
-          // Continue with next reading
-        }
-      }
-
-      // Update progress
-      onProgress({
-        currentDate: new Date(currentDate),
-        totalDays,
-        currentDay:
-          Math.floor(
-            (currentDate.getTime() - adjustedStartDate.getTime()) /
-              (1000 * 60 * 60 * 24),
-          ) + 1,
-      });
-
-      // Move to next day
-      currentDate.setDate(currentDate.getDate() + 1);
+  ): Promise<{importedCount: number}> {
+    if (Platform.OS !== 'ios') {
+      throw new Error('HealthKit is only available on iOS');
     }
 
-    console.log(`[${new Date().toISOString()}] Import complete:`, {
-      importedCount,
-      duplicateCount,
-      totalDays,
-      endTime: new Date().toISOString(),
-    });
+    try {
+      // Initialize HealthKit
+      await this.initializeHealthKit();
 
-    return {importedCount, duplicateCount};
+      // Get existing readings from the database
+      const existingReadings = await this.databaseService.getAllReadings();
+
+      // Find the latest imported date
+      const latestImportedDate =
+        existingReadings.length > 0
+          ? new Date(
+              Math.max(...existingReadings.map(r => r.timestamp.getTime())),
+            )
+          : startDate;
+
+      // If we have existing readings, start from the day after the latest one
+      const adjustedStartDate =
+        existingReadings.length > 0
+          ? new Date(latestImportedDate.getTime() + 1) // Add 1 millisecond to avoid duplicate
+          : startDate;
+
+      // If the adjusted start date is after the end date, there's nothing to import
+      if (adjustedStartDate > endDate) {
+        return {importedCount: 0};
+      }
+
+      const existingTimestamps = new Set(
+        existingReadings.map(r => r.timestamp.getTime()),
+      );
+
+      // Get all readings from the adjusted start date to now in one query
+      const options = {
+        startDate: adjustedStartDate.toISOString(),
+        endDate: endDate.toISOString(),
+        unit: 'mg/dL',
+      };
+
+      console.log('Querying HealthKit with date range:', {
+        startDate: options.startDate,
+        endDate: options.endDate,
+      });
+
+      const results = await new Promise<any[]>((resolve, reject) => {
+        AppleHealthKit.getBloodGlucoseSamples(
+          options,
+          (error: string, samples: any[]) => {
+            if (error) {
+              reject(new Error(error));
+            } else {
+              resolve(samples);
+            }
+          },
+        );
+      });
+
+      console.log(`Retrieved ${results.length} samples from HealthKit`);
+
+      // Filter out readings that already exist
+      const newReadings = results.filter(sample => {
+        const timestamp = new Date(sample.startDate).getTime();
+        return !existingTimestamps.has(timestamp);
+      });
+
+      console.log(`Found ${newReadings.length} new readings to import`);
+
+      let importedCount = 0;
+
+      // Save new readings to the database
+      for (const sample of newReadings) {
+        const reading: Omit<BloodGlucose, 'id'> = {
+          value: Math.round(sample.value * 18.0182), // Convert from mmol/L to mg/dL
+          timestamp: new Date(sample.startDate),
+          notes: sample.device || 'Apple Health',
+          sourceName: 'Apple Health',
+          unit: 'mg/dL', // Add the unit field
+        };
+
+        await this.databaseService.addReading(reading);
+        importedCount++;
+
+        // Update progress
+        if (onProgress) {
+          onProgress({
+            currentDate: new Date(sample.startDate),
+            totalDays: newReadings.length,
+            currentDay: importedCount,
+          });
+        }
+      }
+
+      return {importedCount};
+    } catch (error) {
+      console.error('Error importing blood glucose data:', error);
+      throw error;
+    }
   }
 
   async getOldestBloodGlucoseDate(): Promise<Date | null> {

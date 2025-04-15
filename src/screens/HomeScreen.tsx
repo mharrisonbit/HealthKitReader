@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -26,7 +26,7 @@ import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {useFocusEffect} from '@react-navigation/native';
 import {BloodGlucoseRanges} from '../services/settingsService';
-import AppleHealthKit from '@healthkit/react-native';
+import AppleHealthKit from 'react-native-health';
 
 type RootStackParamList = {
   Home: undefined;
@@ -70,6 +70,14 @@ export const HomeScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [healthKitData, setHealthKitData] = useState<any>(null);
   const [isLoadingHealthKitData, setIsLoadingHealthKitData] = useState(false);
+  const [timePeriod, setTimePeriod] = useState<'24h' | '7d' | '30d'>('24h');
+  const [a1cTimeFrame, setA1cTimeFrame] = useState<
+    '1w' | '1m' | '2m' | '3m' | '6m' | '1y'
+  >('3m');
+  const [showA1cTimeFramePicker, setShowA1cTimeFramePicker] = useState(false);
+  const [a1cValue, setA1cValue] = useState<string | null>(null);
+  const [a1cStatus, setA1cStatus] = useState<string>('N/A');
+  const [isCalculatingA1C, setIsCalculatingA1C] = useState(false);
 
   const loadReadings = async () => {
     try {
@@ -86,9 +94,37 @@ export const HomeScreen = () => {
       const limitedReadings = sortedReadings.slice(0, 100);
 
       setReadings(limitedReadings);
+
+      // After loading readings, check for new data in HealthKit
+      if (Platform.OS === 'ios') {
+        try {
+          const oldestDate = await healthService.getOldestBloodGlucoseDate();
+          if (oldestDate) {
+            const latestReading = sortedReadings[0];
+            const startDate = latestReading
+              ? new Date(latestReading.timestamp.getTime() + 1)
+              : oldestDate;
+            const endDate = new Date();
+
+            const {importedCount} =
+              await healthService.importBloodGlucoseInBatches(
+                startDate,
+                endDate,
+                progress => {},
+              );
+
+            if (importedCount > 0) {
+              const updatedReadings = await databaseService.getAllReadings();
+              const updatedSortedReadings = updatedReadings.sort(
+                (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+              );
+              setReadings(updatedSortedReadings.slice(0, 100));
+            }
+          }
+        } catch (error) {}
+      }
     } catch (err) {
       setError('Failed to load readings');
-      console.error('Error loading readings:', err);
     } finally {
       setIsLoading(false);
     }
@@ -125,7 +161,6 @@ export const HomeScreen = () => {
       await loadReadings();
     } catch (err) {
       setError('Failed to import readings');
-      console.error('Error importing readings:', err);
     } finally {
       setIsImporting(false);
       setImportProgress(null);
@@ -148,19 +183,10 @@ export const HomeScreen = () => {
     }, []),
   );
 
-  const getColorForValue = (value: number): string => {
-    if (value < ranges.low) {
-      return '#ff6b6b'; // Red for low
-    } else if (value > ranges.high) {
-      return '#ff6b6b'; // Red for high
-    }
-    return '#4CAF50'; // Green for normal
-  };
-
-  const calculateA1C = (readings: Array<{value: number}>) => {
+  const calculateA1C = (readings: BloodGlucose[]) => {
     if (readings.length === 0) return null;
 
-    // Calculate average blood glucose over the last 3 months
+    // Calculate average blood glucose over the selected time period
     const averageGlucose =
       readings.reduce((sum, reading) => sum + reading.value, 0) /
       readings.length;
@@ -169,6 +195,16 @@ export const HomeScreen = () => {
     const a1c = (averageGlucose + 46.7) / 28.7;
 
     return a1c.toFixed(1);
+  };
+
+  const getA1CStatus = (a1c: string | null): string => {
+    if (a1c === null) return 'N/A';
+
+    const a1cNum = parseFloat(a1c);
+    if (a1cNum >= 9.0) return 'Extremely High';
+    if (a1cNum >= 6.5) return 'Diabetic';
+    if (a1cNum >= 5.7) return 'Pre-Diabetic';
+    return 'Normal';
   };
 
   const getA1CColor = (a1c: string | null): string => {
@@ -181,14 +217,66 @@ export const HomeScreen = () => {
     return '#4CAF50'; // Green for normal
   };
 
-  const getA1CStatus = (a1c: string | null): string => {
-    if (a1c === null) return 'N/A';
+  const getA1cReadings = useCallback(async () => {
+    const now = new Date();
+    const cutoff = new Date();
 
-    const a1cNum = parseFloat(a1c);
-    if (a1cNum >= 9.0) return 'Extremely High';
-    if (a1cNum >= 6.5) return 'Diabetic';
-    if (a1cNum >= 5.7) return 'Pre-Diabetic';
-    return 'Normal';
+    switch (a1cTimeFrame) {
+      case '1w':
+        cutoff.setDate(now.getDate() - 7);
+        break;
+      case '1m':
+        cutoff.setMonth(now.getMonth() - 1);
+        break;
+      case '2m':
+        cutoff.setMonth(now.getMonth() - 2);
+        break;
+      case '3m':
+        cutoff.setMonth(now.getMonth() - 3);
+        break;
+      case '6m':
+        cutoff.setMonth(now.getMonth() - 6);
+        break;
+      case '1y':
+        cutoff.setFullYear(now.getFullYear() - 1);
+        break;
+    }
+
+    // Get fresh data from the database
+    const allReadings = await databaseService.getAllReadings();
+
+    const filteredReadings = allReadings.filter(
+      reading => reading.timestamp >= cutoff,
+    );
+
+    return filteredReadings;
+  }, [a1cTimeFrame]);
+
+  // Add useEffect to update A1C when time frame changes
+  useEffect(() => {
+    const updateA1C = async () => {
+      setIsCalculatingA1C(true);
+      try {
+        const a1cReadings = await getA1cReadings();
+        const newA1c = calculateA1C(a1cReadings);
+        setA1cValue(newA1c);
+        setA1cStatus(getA1CStatus(newA1c));
+      } catch (error) {
+      } finally {
+        setIsCalculatingA1C(false);
+      }
+    };
+
+    updateA1C();
+  }, [a1cTimeFrame, getA1cReadings]);
+
+  const getColorForValue = (value: number): string => {
+    if (value < ranges.low) {
+      return '#ff6b6b'; // Red for low
+    } else if (value > ranges.high) {
+      return '#ff6b6b'; // Red for high
+    }
+    return '#4CAF50'; // Green for normal
   };
 
   const calculateAverage = (readings: Array<{value: number}>) => {
@@ -253,16 +341,42 @@ export const HomeScreen = () => {
     return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
   });
 
+  const getFilteredReadings = () => {
+    const now = new Date();
+    const cutoff = new Date();
+
+    switch (timePeriod) {
+      case '24h':
+        cutoff.setHours(now.getHours() - 24);
+        break;
+      case '7d':
+        cutoff.setDate(now.getDate() - 7);
+        break;
+      case '30d':
+        cutoff.setDate(now.getDate() - 30);
+        break;
+    }
+
+    return allReadings.filter(reading => reading.timestamp >= cutoff);
+  };
+
+  const formatTimeLabel = (date: Date) => {
+    if (timePeriod === '24h') {
+      return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+    }
+    return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+  };
+
   const chartData = {
-    labels: allReadings.map(() => ''), // Empty labels to remove dates
+    labels: getFilteredReadings().map(r => formatTimeLabel(r.timestamp)),
     datasets: [
       {
-        data: allReadings.map(r => r.value),
+        data: getFilteredReadings().map(r => r.value),
         strokeWidth: 2,
       },
       {
-        data: allReadings.map(() => {
-          const avg = calculateAverage(allReadings);
+        data: getFilteredReadings().map(() => {
+          const avg = calculateAverage(getFilteredReadings());
           return avg ? parseFloat(avg) : 0;
         }),
         strokeWidth: 1,
@@ -420,20 +534,52 @@ export const HomeScreen = () => {
             {!isLandscape && (
               <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                  <Text style={styles.title}>
-                    A1C:{' '}
-                    <Text
-                      style={{color: getA1CColor(calculateA1C(allReadings))}}>
-                      {calculateA1C(allReadings) || 'N/A'}%
-                    </Text>{' '}
-                    <Text
-                      style={[
-                        styles.subtitle,
-                        {color: getA1CColor(calculateA1C(allReadings))},
-                      ]}>
-                      ({getA1CStatus(calculateA1C(allReadings))})
+                  <View style={styles.a1cContainer}>
+                    <Text style={styles.title}>
+                      A1C:{' '}
+                      {isCalculatingA1C ? (
+                        <ActivityIndicator size="small" color="#007AFF" />
+                      ) : (
+                        <>
+                          <Text style={{color: getA1CColor(a1cValue)}}>
+                            {a1cValue || 'N/A'}%
+                          </Text>{' '}
+                          <Text
+                            style={[
+                              styles.subtitle,
+                              {color: getA1CColor(a1cValue)},
+                            ]}>
+                            ({a1cStatus})
+                          </Text>
+                        </>
+                      )}
                     </Text>
-                  </Text>
+                    <TouchableOpacity
+                      style={styles.a1cTimeFrameButton}
+                      onPress={() => setShowA1cTimeFramePicker(true)}>
+                      <Text style={styles.a1cTimeFrameButtonText}>
+                        {(() => {
+                          switch (a1cTimeFrame) {
+                            case '1w':
+                              return '1w';
+                            case '1m':
+                              return '1m';
+                            case '2m':
+                              return '2m';
+                            case '3m':
+                              return '3m';
+                            case '6m':
+                              return '6m';
+                            case '1y':
+                              return '1y';
+                            default:
+                              return '3m';
+                          }
+                        })()}{' '}
+                        ▼
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.subtitle}>
                     Average:{' '}
                     <Text
@@ -523,6 +669,55 @@ export const HomeScreen = () => {
                 styles.chartContainer,
                 isLandscape && styles.chartContainerLandscape,
               ]}>
+              {isLandscape && (
+                <View style={styles.timePeriodContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.timePeriodButton,
+                      timePeriod === '24h' && styles.timePeriodButtonActive,
+                    ]}
+                    onPress={() => setTimePeriod('24h')}>
+                    <Text
+                      style={[
+                        styles.timePeriodButtonText,
+                        timePeriod === '24h' &&
+                          styles.timePeriodButtonTextActive,
+                      ]}>
+                      24h
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.timePeriodButton,
+                      timePeriod === '7d' && styles.timePeriodButtonActive,
+                    ]}
+                    onPress={() => setTimePeriod('7d')}>
+                    <Text
+                      style={[
+                        styles.timePeriodButtonText,
+                        timePeriod === '7d' &&
+                          styles.timePeriodButtonTextActive,
+                      ]}>
+                      7d
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.timePeriodButton,
+                      timePeriod === '30d' && styles.timePeriodButtonActive,
+                    ]}
+                    onPress={() => setTimePeriod('30d')}>
+                    <Text
+                      style={[
+                        styles.timePeriodButtonText,
+                        timePeriod === '30d' &&
+                          styles.timePeriodButtonTextActive,
+                      ]}>
+                      30d
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               {allReadings.length > 0 ? (
                 <LineChart
                   data={chartData}
@@ -822,6 +1017,136 @@ export const HomeScreen = () => {
           disabled={isImporting}
         />
       </View>
+
+      {showA1cTimeFramePicker && (
+        <Modal
+          visible={showA1cTimeFramePicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowA1cTimeFramePicker(false)}>
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setShowA1cTimeFramePicker(false)}>
+            <Pressable
+              style={styles.a1cTimeFramePicker}
+              onPress={e => e.stopPropagation()}>
+              <Text style={styles.a1cTimeFramePickerTitle}>
+                Select Time Frame
+              </Text>
+              <ScrollView style={styles.a1cTimeFrameOptionsContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.a1cTimeFrameOption,
+                    a1cTimeFrame === '1w' && styles.a1cTimeFrameOptionActive,
+                  ]}
+                  onPress={() => {
+                    setA1cTimeFrame('1w');
+                    setShowA1cTimeFramePicker(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.a1cTimeFrameOptionText,
+                      a1cTimeFrame === '1w' &&
+                        styles.a1cTimeFrameOptionTextActive,
+                    ]}>
+                    1 Week
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.a1cTimeFrameOption,
+                    a1cTimeFrame === '1m' && styles.a1cTimeFrameOptionActive,
+                  ]}
+                  onPress={() => {
+                    setA1cTimeFrame('1m');
+                    setShowA1cTimeFramePicker(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.a1cTimeFrameOptionText,
+                      a1cTimeFrame === '1m' &&
+                        styles.a1cTimeFrameOptionTextActive,
+                    ]}>
+                    1 Month
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.a1cTimeFrameOption,
+                    a1cTimeFrame === '2m' && styles.a1cTimeFrameOptionActive,
+                  ]}
+                  onPress={() => {
+                    setA1cTimeFrame('2m');
+                    setShowA1cTimeFramePicker(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.a1cTimeFrameOptionText,
+                      a1cTimeFrame === '2m' &&
+                        styles.a1cTimeFrameOptionTextActive,
+                    ]}>
+                    2 Months
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.a1cTimeFrameOption,
+                    a1cTimeFrame === '3m' && styles.a1cTimeFrameOptionActive,
+                  ]}
+                  onPress={() => {
+                    setA1cTimeFrame('3m');
+                    setShowA1cTimeFramePicker(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.a1cTimeFrameOptionText,
+                      a1cTimeFrame === '3m' &&
+                        styles.a1cTimeFrameOptionTextActive,
+                    ]}>
+                    3 Months
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.a1cTimeFrameOption,
+                    a1cTimeFrame === '6m' && styles.a1cTimeFrameOptionActive,
+                  ]}
+                  onPress={() => {
+                    setA1cTimeFrame('6m');
+                    setShowA1cTimeFramePicker(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.a1cTimeFrameOptionText,
+                      a1cTimeFrame === '6m' &&
+                        styles.a1cTimeFrameOptionTextActive,
+                    ]}>
+                    6 Months
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.a1cTimeFrameOption,
+                    a1cTimeFrame === '1y' && styles.a1cTimeFrameOptionActive,
+                  ]}
+                  onPress={() => {
+                    setA1cTimeFrame('1y');
+                    setShowA1cTimeFramePicker(false);
+                  }}>
+                  <Text
+                    style={[
+                      styles.a1cTimeFrameOptionText,
+                      a1cTimeFrame === '1y' &&
+                        styles.a1cTimeFrameOptionTextActive,
+                    ]}>
+                    1 Year
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </KeyboardAvoidingView>
   );
 };
@@ -1289,5 +1614,79 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  timePeriodContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 16,
+    gap: 8,
+  },
+  timePeriodButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+  },
+  timePeriodButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  timePeriodButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  timePeriodButtonTextActive: {
+    color: '#fff',
+  },
+  a1cContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  a1cTimeFrameButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+  },
+  a1cTimeFrameButtonText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  a1cTimeFramePicker: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    width: '80%',
+    maxWidth: 300,
+    maxHeight: '80%',
+  },
+  a1cTimeFramePickerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+    color: '#333',
+  },
+  a1cTimeFrameOptionsContainer: {
+    maxHeight: 300, // Set a fixed max height for the scrollable area
+  },
+  a1cTimeFrameOption: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: '#f5f5f5',
+  },
+  a1cTimeFrameOptionActive: {
+    backgroundColor: '#007AFF',
+  },
+  a1cTimeFrameOptionText: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  a1cTimeFrameOptionTextActive: {
+    color: '#fff',
   },
 });
