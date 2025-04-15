@@ -93,6 +93,14 @@ A comprehensive React Native application for tracking and managing blood glucose
   - Visual status indicators
   - Navigation to key features
   - Recent activity summary
+  - **Landscape Mode Features**
+    - 24-hour chart view with day-by-day navigation
+    - Interactive date selection for viewing historical data
+    - Automatic loading indicators during data fetch
+    - Navigation controls to move between days with data
+    - Disabled navigation when no more data is available
+    - Optimized chart display for landscape orientation
+    - Hidden import button in landscape mode for better space utilization
 
 - **Settings Screen**
   - Range customization
@@ -100,6 +108,39 @@ A comprehensive React Native application for tracking and managing blood glucose
   - App preferences
   - Data management options
   - User preferences
+
+### Development and Release Mode Configuration
+
+#### Development Mode Features
+
+- Reactotron integration for debugging
+- Development-only logging
+- Chrome DevTools connection
+- Detailed error tracking
+
+#### Release Mode Optimizations
+
+- All development tools disabled
+- No console logging
+- Optimized performance
+- Reactotron configuration excluded
+
+To build the app in release mode:
+
+```bash
+# For iOS
+npx react-native run-ios --configuration Release
+
+# For Android
+npx react-native run-android --variant=release
+```
+
+#### Debugging and Logging
+
+- Development mode includes Reactotron for advanced debugging
+- Console logging is automatically disabled in release builds
+- Error handling is optimized for production
+- Performance monitoring tools are development-only
 
 #### 6. Technical Features
 
