@@ -26,6 +26,7 @@ import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {useFocusEffect} from '@react-navigation/native';
 import {BloodGlucoseRanges} from '../services/settingsService';
+import AppleHealthKit from '@healthkit/react-native';
 
 type RootStackParamList = {
   Home: undefined;
@@ -67,13 +68,24 @@ export const HomeScreen = () => {
     currentDay: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [healthKitData, setHealthKitData] = useState<any>(null);
+  const [isLoadingHealthKitData, setIsLoadingHealthKitData] = useState(false);
 
   const loadReadings = async () => {
     try {
       setIsLoading(true);
       setError(null);
       const allReadings = await databaseService.getAllReadings();
-      setReadings(allReadings);
+
+      // Sort readings by date in descending order (newest first)
+      const sortedReadings = allReadings.sort(
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+      );
+
+      // Limit to last 100 readings for better performance
+      const limitedReadings = sortedReadings.slice(0, 100);
+
+      setReadings(limitedReadings);
     } catch (err) {
       setError('Failed to load readings');
       console.error('Error loading readings:', err);
@@ -87,21 +99,26 @@ export const HomeScreen = () => {
       setIsImporting(true);
       setError(null);
 
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      // First get the oldest available date from HealthKit
+      const oldestDate = await healthService.getOldestBloodGlucoseDate();
 
-      const {importedCount, duplicateCount} =
-        await healthService.importBloodGlucoseInBatches(
-          threeMonthsAgo,
-          new Date(),
-          progress => {
-            setImportProgress(progress);
-          },
-        );
+      if (!oldestDate) {
+        Alert.alert('No Data', 'No blood glucose data available in HealthKit');
+        return;
+      }
+
+      // Import data from the oldest available date
+      const {importedCount} = await healthService.importBloodGlucoseInBatches(
+        oldestDate,
+        new Date(),
+        progress => {
+          setImportProgress(progress);
+        },
+      );
 
       Alert.alert(
         'Import Complete',
-        `Successfully imported ${importedCount} readings. ${duplicateCount} duplicates were skipped.`,
+        `Successfully imported ${importedCount} readings.`,
       );
 
       // Refresh the readings list
@@ -130,68 +147,6 @@ export const HomeScreen = () => {
       loadReadings();
     }, []),
   );
-
-  const handleAddReading = async (data: Omit<BloodGlucose, 'id'>) => {
-    try {
-      const newReading: BloodGlucose = {
-        ...data,
-        id: Date.now().toString(),
-        timestamp: new Date(),
-        sourceName: 'Manual Entry',
-      };
-
-      // Save to database
-      await databaseService.addReading(newReading);
-
-      // Try to save to HealthKit (only on iOS)
-      if (Platform.OS === 'ios') {
-        try {
-          await healthService.saveBloodGlucoseToHealthKit(
-            newReading.value,
-            newReading.timestamp,
-          );
-        } catch (healthKitError) {
-          console.error('Failed to save to HealthKit:', healthKitError);
-          // Don't throw the error, just log it, as the reading is saved in our database
-        }
-      }
-
-      await loadReadings(); // Refresh readings after adding
-    } catch (error) {
-      console.error('Error adding reading:', error);
-      Alert.alert('Error', 'Failed to save reading');
-    }
-  };
-
-  const handleDeleteReading = async (
-    id: string,
-    value: number,
-    timestamp: Date,
-  ) => {
-    Alert.alert(
-      'Delete Reading',
-      `Are you sure you want to delete the reading of ${value} mg/dL from ${timestamp.toLocaleString()}?`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await databaseService.deleteReading(id);
-              await loadReadings(); // Refresh readings after deleting
-            } catch (error) {
-              console.error('Error deleting reading:', error);
-              Alert.alert('Error', 'Failed to delete reading');
-            }
-          },
-        },
-      ],
-    );
-  };
 
   const getColorForValue = (value: number): string => {
     if (value < ranges.low) {
@@ -390,12 +345,44 @@ export const HomeScreen = () => {
     setEditingReading(null);
   };
 
-  const handleReadingPress = (reading: BloodGlucose) => {
+  const handleReadingPress = async (reading: BloodGlucose) => {
     setSelectedReading(reading);
+    if (reading.sourceName === 'Apple Health') {
+      setIsLoadingHealthKitData(true);
+      try {
+        const options = {
+          startDate: new Date(reading.timestamp.getTime() - 1000).toISOString(), // 1 second before
+          endDate: new Date(reading.timestamp.getTime() + 1000).toISOString(), // 1 second after
+        };
+
+        const results = await new Promise<any[]>(resolve => {
+          AppleHealthKit.getBloodGlucoseSamples(
+            options,
+            (error: string, samples: any[]) => {
+              if (error) {
+                console.error('Error getting HealthKit data:', error);
+                resolve([]);
+              } else {
+                resolve(samples);
+              }
+            },
+          );
+        });
+
+        if (results.length > 0) {
+          setHealthKitData(results[0]);
+        }
+      } catch (error) {
+        console.error('Error fetching HealthKit data:', error);
+      } finally {
+        setIsLoadingHealthKitData(false);
+      }
+    }
   };
 
   const handleClosePopup = () => {
     setSelectedReading(null);
+    setHealthKitData(null);
   };
 
   const handlePointPress = (data: {
@@ -522,13 +509,6 @@ export const HomeScreen = () => {
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.addButton}
-                      onPress={() =>
-                        navigation.navigate('Add', {onSave: handleAddReading})
-                      }>
-                      <Text style={styles.addButtonText}>+</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
                       style={styles.settingsButton}
                       onPress={() => navigation.navigate('Settings')}>
                       <Text style={styles.settingsButtonText}>⚙️</Text>
@@ -543,33 +523,41 @@ export const HomeScreen = () => {
                 styles.chartContainer,
                 isLandscape && styles.chartContainerLandscape,
               ]}>
-              <LineChart
-                data={chartData}
-                width={chartConfig.width}
-                height={chartConfig.height}
-                chartConfig={chartConfig}
-                getDotColor={(dataPoint, index) => {
-                  const value = allReadings[index].value;
-                  const range = ranges;
-                  if (value < range.low) {
-                    return '#ff6b6b'; // Red for low
-                  } else if (value > range.high) {
-                    return '#ff6b6b'; // Red for high
-                  }
-                  return '#4CAF50'; // Green for normal
-                }}
-                onDataPointClick={handlePointPress}
-                bezier
-                style={styles.chart}
-                withVerticalLines={false}
-                withHorizontalLines={true}
-                segments={5}
-                fromZero={false}
-                yAxisInterval={1}
-                yAxisLabel="mg/dL"
-                xLabelsOffset={-10}
-                yLabelsOffset={10}
-              />
+              {allReadings.length > 0 ? (
+                <LineChart
+                  data={chartData}
+                  width={chartConfig.width}
+                  height={chartConfig.height}
+                  chartConfig={chartConfig}
+                  getDotColor={(dataPoint, index) => {
+                    const value = allReadings[index].value;
+                    const range = ranges;
+                    if (value < range.low) {
+                      return '#ff6b6b'; // Red for low
+                    } else if (value > range.high) {
+                      return '#ff6b6b'; // Red for high
+                    }
+                    return '#4CAF50'; // Green for normal
+                  }}
+                  onDataPointClick={handlePointPress}
+                  bezier
+                  style={styles.chart}
+                  withVerticalLines={false}
+                  withHorizontalLines={true}
+                  segments={5}
+                  fromZero={false}
+                  yAxisInterval={1}
+                  yAxisLabel="mg/dL"
+                  xLabelsOffset={-10}
+                  yLabelsOffset={10}
+                />
+              ) : (
+                <View style={styles.emptyChartContainer}>
+                  <Text style={styles.emptyChartText}>
+                    No readings to display
+                  </Text>
+                </View>
+              )}
               <View style={styles.legendContainer}>
                 <View style={styles.legendItem}>
                   <View
@@ -617,33 +605,23 @@ export const HomeScreen = () => {
                           </Text>
                           <Text style={styles.readingSource}>
                             {reading.sourceName}
+                            {reading.sourceName === 'Apple Health' &&
+                              reading.notes && (
+                                <Text style={styles.readingNotes}>
+                                  {' '}
+                                  ({reading.notes})
+                                </Text>
+                              )}
                           </Text>
-                          {reading.notes && (
-                            <Text style={styles.readingNotes} numberOfLines={1}>
-                              {reading.notes}
-                            </Text>
-                          )}
+                          {reading.notes &&
+                            reading.sourceName !== 'Apple Health' && (
+                              <Text
+                                style={styles.readingNotes}
+                                numberOfLines={1}>
+                                {reading.notes}
+                              </Text>
+                            )}
                         </View>
-                        {reading.sourceName === 'Manual Entry' && (
-                          <View style={styles.readingActions}>
-                            <TouchableOpacity
-                              style={styles.editButton}
-                              onPress={() => handleEditReading(reading)}>
-                              <Text style={styles.editButtonText}>✎</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.deleteButton}
-                              onPress={() =>
-                                handleDeleteReading(
-                                  reading.id,
-                                  reading.value,
-                                  reading.timestamp,
-                                )
-                              }>
-                              <Text style={styles.deleteButtonText}>×</Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
                       </TouchableOpacity>
                     ))
                   ) : (
@@ -652,7 +630,7 @@ export const HomeScreen = () => {
                         No readings available
                       </Text>
                       <Text style={styles.emptyStateSubtext}>
-                        Add a reading or sync with HealthKit/Google Fit
+                        Sync with HealthKit to import readings
                       </Text>
                     </View>
                   )}
@@ -762,6 +740,49 @@ export const HomeScreen = () => {
                 <Text style={styles.popupValue}>{selectedReading.notes}</Text>
               </View>
             )}
+            {selectedReading.sourceName === 'Apple Health' && (
+              <>
+                {isLoadingHealthKitData ? (
+                  <View style={styles.popupInfo}>
+                    <ActivityIndicator size="small" color="#007AFF" />
+                    <Text style={styles.popupLabel}>
+                      Loading HealthKit data...
+                    </Text>
+                  </View>
+                ) : healthKitData ? (
+                  <>
+                    <View style={styles.popupInfo}>
+                      <Text style={styles.popupLabel}>HealthKit ID:</Text>
+                      <Text style={styles.popupValue}>{healthKitData.id}</Text>
+                    </View>
+                    <View style={styles.popupInfo}>
+                      <Text style={styles.popupLabel}>Original Value:</Text>
+                      <Text style={styles.popupValue}>
+                        {healthKitData.value} {healthKitData.unit}
+                      </Text>
+                    </View>
+                    <View style={styles.popupInfo}>
+                      <Text style={styles.popupLabel}>Device:</Text>
+                      <Text style={styles.popupValue}>
+                        {healthKitData.device || 'Unknown'}
+                      </Text>
+                    </View>
+                    <View style={styles.popupInfo}>
+                      <Text style={styles.popupLabel}>Metadata:</Text>
+                      <Text style={styles.popupValue}>
+                        {JSON.stringify(healthKitData.metadata || {}, null, 2)}
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.popupInfo}>
+                    <Text style={styles.popupLabel}>
+                      No additional HealthKit data available
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
             <TouchableOpacity
               style={styles.closeButton}
               onPress={handleClosePopup}>
@@ -773,6 +794,11 @@ export const HomeScreen = () => {
 
       {isImporting && importProgress && (
         <View style={styles.importProgress}>
+          <ActivityIndicator
+            size="small"
+            color="#0000ff"
+            style={styles.importSpinner}
+          />
           <Text style={styles.importProgressText}>
             Importing data for {importProgress.currentDate.toLocaleDateString()}
           </Text>
@@ -925,7 +951,6 @@ const styles = StyleSheet.create({
   },
   readingContent: {
     flex: 1,
-    marginRight: 8,
   },
   readingValue: {
     fontSize: 18,
@@ -995,11 +1020,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
-  },
-  readingActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
   },
   editButton: {
     width: 30,
@@ -1212,13 +1232,34 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   importProgress: {
-    backgroundColor: '#f0f0f0',
-    padding: 10,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 16,
     alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  importSpinner: {
+    marginBottom: 8,
   },
   importProgressText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: '#333',
+    marginVertical: 4,
+    textAlign: 'center',
   },
   errorContainer: {
     backgroundColor: '#ff6b6b',
@@ -1235,5 +1276,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#eee',
+  },
+  emptyChartContainer: {
+    width: '100%',
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 16,
+  },
+  emptyChartText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
 });

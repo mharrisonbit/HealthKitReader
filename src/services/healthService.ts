@@ -1,11 +1,6 @@
 import {Platform} from 'react-native';
 import GoogleFit, {Scopes} from 'react-native-google-fit';
-import AppleHealthKit, {
-  HealthKitPermissions,
-  HealthInputOptions,
-  HealthValue,
-  HealthValueOptions,
-} from 'react-native-health';
+import AppleHealthKit from 'react-native-health';
 import {
   HKHealthStore,
   HKQuantityType,
@@ -182,17 +177,21 @@ export class HealthService {
                 } samples from HealthKit`,
               );
               const convertedSamples = samples.map((result: any) => {
+                // Convert from mmol/L to mg/dL
+                const valueInMgDl = Math.round(result.value * 18.0182);
                 console.log(
                   `[${new Date().toISOString()}] Processing sample:`,
                   {
-                    value: result.value,
+                    originalValue: result.value,
+                    convertedValue: valueInMgDl,
                     startDate: result.startDate,
                     endDate: result.endDate,
                     sourceName: result.sourceName || 'Unknown',
+                    unit: result.unit || 'Unknown',
                   },
                 );
                 return {
-                  value: result.value,
+                  value: valueInMgDl,
                   startDate: result.startDate,
                   endDate: result.endDate,
                 };
@@ -415,17 +414,19 @@ export class HealthService {
     }
 
     try {
+      // Convert from mg/dL to mmol/L for HealthKit
+      const valueInMmolL = value / 18.0182;
       console.log('Saving to HealthKit:', {
-        value: value,
-        unit: 'mg/dL',
+        originalValue: value,
+        convertedValue: valueInMmolL,
+        unit: 'mmol/L',
       });
 
       await new Promise<void>((resolve, reject) => {
         AppleHealthKit.saveBloodGlucoseSample(
           {
-            value: value,
+            value: valueInMmolL,
             startDate: date.toISOString(),
-            unit: 'mg/dL',
           },
           (error: string) => {
             if (error) {
@@ -607,5 +608,45 @@ export class HealthService {
     });
 
     return {importedCount, duplicateCount};
+  }
+
+  async getOldestBloodGlucoseDate(): Promise<Date | null> {
+    if (Platform.OS !== 'ios') {
+      return null;
+    }
+
+    try {
+      await this.initializeHealthKit();
+      const options = {
+        startDate: new Date(2000, 0, 1).toISOString(), // Start from year 2000
+        endDate: new Date().toISOString(), // Current date as end date
+        ascending: true, // Get the oldest date first
+        limit: 1, // We only need the oldest one
+      };
+
+      return new Promise(resolve => {
+        AppleHealthKit.getBloodGlucoseSamples(
+          options,
+          (error: string, results: any[]) => {
+            if (error) {
+              console.error('Error getting oldest blood glucose date:', error);
+              resolve(null);
+            } else if (results && results.length > 0) {
+              console.log(
+                'Found oldest blood glucose date:',
+                results[0].startDate,
+              );
+              resolve(new Date(results[0].startDate));
+            } else {
+              console.log('No blood glucose data found');
+              resolve(null);
+            }
+          },
+        );
+      });
+    } catch (error) {
+      console.error('Error getting oldest blood glucose date:', error);
+      return null;
+    }
   }
 }
