@@ -93,6 +93,14 @@ A comprehensive React Native application for tracking and managing blood glucose
   - Visual status indicators
   - Navigation to key features
   - Recent activity summary
+  - **Landscape Mode Features**
+    - 24-hour chart view with day-by-day navigation
+    - Interactive date selection for viewing historical data
+    - Automatic loading indicators during data fetch
+    - Navigation controls to move between days with data
+    - Disabled navigation when no more data is available
+    - Optimized chart display for landscape orientation
+    - Hidden import button in landscape mode for better space utilization
 
 - **Settings Screen**
   - Range customization

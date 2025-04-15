@@ -71,6 +71,7 @@ export const HomeScreen = () => {
   const [healthKitData, setHealthKitData] = useState<any>(null);
   const [isLoadingHealthKitData, setIsLoadingHealthKitData] = useState(false);
   const [timePeriod, setTimePeriod] = useState<'24h' | '7d' | '30d'>('24h');
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [a1cTimeFrame, setA1cTimeFrame] = useState<
     '1w' | '1m' | '2m' | '3m' | '6m' | '1y'
   >('3m');
@@ -78,6 +79,33 @@ export const HomeScreen = () => {
   const [a1cValue, setA1cValue] = useState<string | null>(null);
   const [a1cStatus, setA1cStatus] = useState<string>('N/A');
   const [isCalculatingA1C, setIsCalculatingA1C] = useState(false);
+  const [isLoadingChart, setIsLoadingChart] = useState(false);
+  const [hasPreviousData, setHasPreviousData] = useState(false);
+  const [hasNextData, setHasNextData] = useState(false);
+
+  const [chartData, setChartData] = useState<{
+    labels: string[];
+    datasets: Array<{
+      data: number[];
+      strokeWidth: number;
+      color?: (opacity: number) => string;
+      withDots?: boolean;
+    }>;
+  }>({
+    labels: [],
+    datasets: [
+      {
+        data: [],
+        strokeWidth: 2,
+      },
+      {
+        data: [],
+        strokeWidth: 1,
+        color: (opacity = 1) => `rgba(128, 128, 128, ${opacity})`,
+        withDots: false,
+      },
+    ],
+  });
 
   const loadReadings = async () => {
     try {
@@ -346,23 +374,22 @@ export const HomeScreen = () => {
     return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
   });
 
-  const getFilteredReadings = () => {
-    const now = new Date();
-    const cutoff = new Date();
+  const getFilteredReadings = async (date?: Date) => {
+    const now = date || new Date();
+    const cutoff = new Date(now);
+    cutoff.setHours(0, 0, 0, 0);
 
-    switch (timePeriod) {
-      case '24h':
-        cutoff.setHours(now.getHours() - 24);
-        break;
-      case '7d':
-        cutoff.setDate(now.getDate() - 7);
-        break;
-      case '30d':
-        cutoff.setDate(now.getDate() - 30);
-        break;
-    }
-
-    return allReadings.filter(reading => reading.timestamp >= cutoff);
+    // Get fresh data from the database for the selected time period
+    const allReadings = await databaseService.getAllReadings();
+    return allReadings
+      .filter(reading => {
+        const readingDate = new Date(reading.timestamp);
+        return (
+          readingDate >= cutoff &&
+          readingDate < new Date(cutoff.getTime() + 24 * 60 * 60 * 1000)
+        );
+      })
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   };
 
   const formatTimeLabel = (date: Date) => {
@@ -372,24 +399,88 @@ export const HomeScreen = () => {
     return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
   };
 
-  const chartData = {
-    labels: getFilteredReadings().map(r => formatTimeLabel(r.timestamp)),
-    datasets: [
-      {
-        data: getFilteredReadings().map(r => r.value),
-        strokeWidth: 2,
-      },
-      {
-        data: getFilteredReadings().map(() => {
-          const avg = calculateAverage(getFilteredReadings());
-          return avg ? parseFloat(avg) : 0;
-        }),
-        strokeWidth: 1,
-        color: (opacity = 1) => `rgba(128, 128, 128, ${opacity})`,
-        withDots: false,
-      },
-    ],
+  const formatDateLabel = (date: Date) => {
+    return date.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
   };
+
+  const navigateToPreviousDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() - 1);
+    setSelectedDate(newDate);
+  };
+
+  const navigateToNextDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + 1);
+    if (newDate <= new Date()) {
+      setSelectedDate(newDate);
+    }
+  };
+
+  const checkAvailableData = async () => {
+    const now = new Date();
+    const allReadings = await databaseService.getAllReadings();
+
+    if (allReadings.length === 0) {
+      setHasPreviousData(false);
+      setHasNextData(false);
+      return;
+    }
+
+    // Find the earliest and latest readings
+    const earliestReading = allReadings.reduce((earliest, current) =>
+      current.timestamp < earliest.timestamp ? current : earliest,
+    );
+    const latestReading = allReadings.reduce((latest, current) =>
+      current.timestamp > latest.timestamp ? current : latest,
+    );
+
+    // Check if there's data before the selected date
+    setHasPreviousData(earliestReading.timestamp < selectedDate);
+
+    // Check if there's data after the selected date and it's not in the future
+    setHasNextData(
+      latestReading.timestamp > selectedDate &&
+        new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000) <= now,
+    );
+  };
+
+  // Update chart data when selected date changes
+  useEffect(() => {
+    const updateChartData = async () => {
+      setIsLoadingChart(true);
+      try {
+        const filteredReadings = await getFilteredReadings(selectedDate);
+        const average = calculateAverage(filteredReadings);
+
+        setChartData({
+          labels: filteredReadings.map(r => formatTimeLabel(r.timestamp)),
+          datasets: [
+            {
+              data: filteredReadings.map(r => r.value),
+              strokeWidth: 2,
+            },
+            {
+              data: filteredReadings.map(() =>
+                average ? parseFloat(average) : 0,
+              ),
+              strokeWidth: 1,
+              color: (opacity = 1) => `rgba(128, 128, 128, ${opacity})`,
+              withDots: false,
+            },
+          ],
+        });
+        await checkAvailableData();
+      } finally {
+        setIsLoadingChart(false);
+      }
+    };
+
+    updateChartData();
+  }, [selectedDate]);
 
   const chartConfig = {
     backgroundColor: '#ffffff',
@@ -675,62 +766,54 @@ export const HomeScreen = () => {
                 isLandscape && styles.chartContainerLandscape,
               ]}>
               {isLandscape && (
-                <View style={styles.timePeriodContainer}>
+                <View style={styles.chartNavigationContainer}>
                   <TouchableOpacity
                     style={[
-                      styles.timePeriodButton,
-                      timePeriod === '24h' && styles.timePeriodButtonActive,
+                      styles.navigationButton,
+                      !hasPreviousData && styles.navigationButtonDisabled,
                     ]}
-                    onPress={() => setTimePeriod('24h')}>
+                    onPress={navigateToPreviousDay}
+                    disabled={!hasPreviousData}>
                     <Text
                       style={[
-                        styles.timePeriodButtonText,
-                        timePeriod === '24h' &&
-                          styles.timePeriodButtonTextActive,
+                        styles.navigationButtonText,
+                        !hasPreviousData && styles.navigationButtonTextDisabled,
                       ]}>
-                      24h
+                      ←
                     </Text>
                   </TouchableOpacity>
+                  <Text style={styles.dateLabel}>
+                    {formatDateLabel(selectedDate)}
+                  </Text>
                   <TouchableOpacity
                     style={[
-                      styles.timePeriodButton,
-                      timePeriod === '7d' && styles.timePeriodButtonActive,
+                      styles.navigationButton,
+                      !hasNextData && styles.navigationButtonDisabled,
                     ]}
-                    onPress={() => setTimePeriod('7d')}>
+                    onPress={navigateToNextDay}
+                    disabled={!hasNextData}>
                     <Text
                       style={[
-                        styles.timePeriodButtonText,
-                        timePeriod === '7d' &&
-                          styles.timePeriodButtonTextActive,
+                        styles.navigationButtonText,
+                        !hasNextData && styles.navigationButtonTextDisabled,
                       ]}>
-                      7d
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.timePeriodButton,
-                      timePeriod === '30d' && styles.timePeriodButtonActive,
-                    ]}
-                    onPress={() => setTimePeriod('30d')}>
-                    <Text
-                      style={[
-                        styles.timePeriodButtonText,
-                        timePeriod === '30d' &&
-                          styles.timePeriodButtonTextActive,
-                      ]}>
-                      30d
+                      →
                     </Text>
                   </TouchableOpacity>
                 </View>
               )}
-              {allReadings.length > 0 ? (
+              {isLoadingChart ? (
+                <View style={styles.chartLoadingContainer}>
+                  <ActivityIndicator size="large" color="#007AFF" />
+                </View>
+              ) : chartData.labels.length > 0 ? (
                 <LineChart
                   data={chartData}
                   width={chartConfig.width}
                   height={chartConfig.height}
                   chartConfig={chartConfig}
                   getDotColor={(dataPoint, index) => {
-                    const value = allReadings[index].value;
+                    const value = chartData.datasets[0].data[index];
                     const range = ranges;
                     if (value < range.low) {
                       return '#ff6b6b'; // Red for low
@@ -754,7 +837,7 @@ export const HomeScreen = () => {
               ) : (
                 <View style={styles.emptyChartContainer}>
                   <Text style={styles.emptyChartText}>
-                    No readings to display
+                    No readings for this day
                   </Text>
                 </View>
               )}
@@ -1015,13 +1098,15 @@ export const HomeScreen = () => {
         </View>
       )}
 
-      <View style={styles.footer}>
-        <Button
-          title="Import from Health"
-          onPress={handleImportFromHealth}
-          disabled={isImporting}
-        />
-      </View>
+      {!isLandscape && (
+        <View style={styles.footer}>
+          <Button
+            title="Import from Health"
+            onPress={handleImportFromHealth}
+            disabled={isImporting}
+          />
+        </View>
+      )}
 
       {showA1cTimeFramePicker && (
         <Modal
@@ -1693,5 +1778,46 @@ const styles = StyleSheet.create({
   },
   a1cTimeFrameOptionTextActive: {
     color: '#fff',
+  },
+  chartNavigationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 16,
+  },
+  navigationButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navigationButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  navigationButtonText: {
+    fontSize: 20,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  navigationButtonTextDisabled: {
+    color: '#666',
+  },
+  dateLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    minWidth: 100,
+    textAlign: 'center',
+  },
+  chartLoadingContainer: {
+    width: '100%',
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 16,
   },
 });
