@@ -10,16 +10,22 @@ import {
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {RootStackParamList} from '../../App';
+import {RootStackParamList} from '../types/navigation';
 import {SettingsService} from '../services/settingsService';
+import {DatabaseService} from '../services/database';
+import {HealthService} from '../services/healthService';
 
 type SettingsScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Settings'>;
 };
 
 const settingsService = SettingsService.getInstance();
+const databaseService = new DatabaseService();
+const healthService = HealthService.getInstance();
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
   const [ranges, setRanges] = useState({
@@ -31,6 +37,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     low: 70,
     high: 180,
   });
+  const [isResyncing, setIsResyncing] = useState(false);
+  const serviceName = Platform.OS === 'ios' ? 'HealthKit' : 'Google Fit';
 
   useEffect(() => {
     loadSettings();
@@ -93,6 +101,74 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     }
   };
 
+  const handleDeleteAllReadings = async () => {
+    Alert.alert(
+      'Delete All Readings',
+      'Are you sure you want to delete all readings? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await databaseService.deleteAllReadings();
+              Alert.alert(
+                'Success',
+                'All readings have been permanently deleted.',
+                [{text: 'OK'}],
+              );
+            } catch (error) {
+              console.error('Error deleting readings:', error);
+              Alert.alert(
+                'Error',
+                'Failed to delete readings. Please try again.',
+                [{text: 'OK'}],
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleResyncHealthKit = async () => {
+    if (!healthService) {
+      Alert.alert('Error', `${serviceName} is not available on this device.`);
+      return;
+    }
+
+    setIsResyncing(true);
+    try {
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+      // Start importing from 3 months ago
+      await healthService.getBloodGlucoseFromHealthKit(
+        threeMonthsAgo,
+        new Date(),
+      );
+
+      Alert.alert(
+        'Success',
+        `${serviceName} data has been successfully imported.`,
+        [{text: 'OK'}],
+      );
+    } catch (error) {
+      console.error('Error resyncing:', error);
+      Alert.alert(
+        'Error',
+        `Failed to import ${serviceName} data. Please check your permissions and try again.`,
+        [{text: 'OK'}],
+      );
+    } finally {
+      setIsResyncing(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.container}>
       <Pressable style={styles.container} onPress={Keyboard.dismiss}>
@@ -146,6 +222,45 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Data Management</Text>
+            <Text style={styles.sectionDescription}>
+              Manage your blood glucose data and {serviceName} integration
+            </Text>
+
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.button, styles.deleteButton]}
+                onPress={handleDeleteAllReadings}>
+                <Text style={styles.buttonText}>Delete All Readings</Text>
+                <Text style={styles.buttonSubtext}>
+                  Permanently remove all stored readings
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.button, styles.syncButton]}
+                onPress={handleResyncHealthKit}
+                disabled={isResyncing}>
+                {isResyncing ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator color="#fff" />
+                    <Text style={styles.loadingText}>Importing data...</Text>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={styles.buttonText}>
+                      Import {serviceName} Data
+                    </Text>
+                    <Text style={styles.buttonSubtext}>
+                      Sync data from the last 3 months
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </Pressable>
@@ -220,5 +335,52 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+  },
+  buttonContainer: {
+    gap: 15,
+  },
+  button: {
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+  },
+  syncButton: {
+    backgroundColor: '#007AFF',
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  buttonSubtext: {
+    color: '#fff',
+    fontSize: 12,
+    opacity: 0.8,
+    marginTop: 4,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 14,
   },
 });
