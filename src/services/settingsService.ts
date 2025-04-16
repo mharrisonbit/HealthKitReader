@@ -16,11 +16,13 @@ const DEFAULT_RANGES: BloodGlucoseRanges = {
 
 const STORAGE_KEY = '@blood_glucose_ranges';
 const HEALTHKIT_ENABLED_KEY = '@healthkit_enabled';
+const TIME_RANGE_KEY = '@time_range';
 
 export class SettingsService {
   private static instance: SettingsService;
   private ranges: BloodGlucoseRanges = DEFAULT_RANGES;
   private healthKitEnabled: boolean = false;
+  private timeRange: number = 24; // Default to 24 hours
   private subscribers: ((ranges: BloodGlucoseRanges) => void)[] = [];
 
   private constructor() {
@@ -46,6 +48,11 @@ export class SettingsService {
       );
       if (storedHealthKitEnabled !== null) {
         this.healthKitEnabled = JSON.parse(storedHealthKitEnabled);
+      }
+
+      const storedTimeRange = await AsyncStorage.getItem(TIME_RANGE_KEY);
+      if (storedTimeRange) {
+        this.timeRange = parseInt(storedTimeRange, 10);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -117,6 +124,24 @@ export class SettingsService {
   async getGoogleFitEnabled(): Promise<boolean> {
     const enabled = await AsyncStorage.getItem('googleFitEnabled');
     return enabled === 'true';
+  }
+
+  async getTimeRange(): Promise<number> {
+    const storedTimeRange = await AsyncStorage.getItem(TIME_RANGE_KEY);
+    if (storedTimeRange) {
+      return parseInt(storedTimeRange, 10);
+    }
+    return 24; // Default to 24 hours
+  }
+
+  async updateTimeRange(newTimeRange: number): Promise<void> {
+    this.timeRange = newTimeRange;
+    try {
+      await AsyncStorage.setItem(TIME_RANGE_KEY, newTimeRange.toString());
+    } catch (error) {
+      console.error('Error saving time range:', error);
+      throw error;
+    }
   }
 
   subscribeToRanges(callback: (ranges: BloodGlucoseRanges) => void): {

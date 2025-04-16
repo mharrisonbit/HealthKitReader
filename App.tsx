@@ -17,6 +17,10 @@ import {BloodGlucoseChartScreen} from './src/screens/BloodGlucoseChartScreen';
 import {BloodGlucose} from './src/types/BloodGlucose';
 import {View, Text} from 'react-native';
 import {DatabaseService} from './src/services/database';
+import {
+  LoadingScreen,
+  ErrorScreen,
+} from './src/components/LoadingAndErrorScreens';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -92,36 +96,16 @@ function App(): React.JSX.Element {
   };
 
   if (isLoading) {
-    if (__DEV__) {
-      console.log('Rendering loading screen');
-    }
-    return (
-      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-        <Text>Loading...</Text>
-      </View>
-    );
+    // console.log('Rendering loading screen');
+    return <LoadingScreen />;
   }
 
   if (error) {
-    if (__DEV__) {
-      console.log('Rendering error screen:', error);
-    }
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: 20,
-        }}>
-        <Text style={{color: 'red', textAlign: 'center'}}>{error}</Text>
-      </View>
-    );
+    // console.log('Rendering error screen:', error);
+    return <ErrorScreen error={error} />;
   }
 
-  if (__DEV__) {
-    console.log('Rendering main app');
-  }
+  // console.log('Rendering main app');
   return (
     <NavigationContainer>
       <Stack.Navigator initialRouteName="Home">

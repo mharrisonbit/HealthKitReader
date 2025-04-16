@@ -37,13 +37,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     low: 70,
     high: 180,
   });
+  const [isLoading, setIsLoading] = useState(false);
 
   const commonRanges = [
-    {label: 'Standard', low: 70, high: 180},
+    {label: 'Standard/ADA/AACE Guidelines', low: 70, high: 180},
     {label: 'Tight Control', low: 80, high: 140},
     {label: 'Liberal', low: 60, high: 200},
-    {label: 'ADA Guidelines', low: 70, high: 180},
-    {label: 'AACE Guidelines', low: 70, high: 180},
   ];
 
   const serviceName = Platform.OS === 'ios' ? 'HealthKit' : 'Google Fit';
@@ -143,6 +142,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled">
+          {isLoading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#007AFF" />
+            </View>
+          )}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Blood Glucose Ranges</Text>
             <View style={styles.toggleContainer}>
@@ -306,5 +310,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.8,
     marginTop: 4,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
   },
 });

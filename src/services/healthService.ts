@@ -60,7 +60,7 @@ export class HealthService {
     }
 
     if (Platform.OS !== 'ios') {
-      console.log('HealthKit is only available on iOS');
+      // console.log('HealthKit is only available on iOS');
       return false;
     }
 
@@ -100,7 +100,7 @@ export class HealthService {
     }
 
     if (Platform.OS !== 'android') {
-      console.log('Google Fit is only available on Android');
+      // console.log('Google Fit is only available on Android');
       return false;
     }
 
@@ -136,7 +136,7 @@ export class HealthService {
 
     const initialized = await this.initializeHealthKit();
     if (!initialized) {
-      console.log(`[${new Date().toISOString()}] HealthKit not initialized`);
+      // console.log(`[${new Date().toISOString()}] HealthKit not initialized`);
       return [];
     }
 
@@ -416,11 +416,11 @@ export class HealthService {
     try {
       // Convert from mg/dL to mmol/L for HealthKit
       const valueInMmolL = value / 18.0182;
-      console.log('Saving to HealthKit:', {
-        originalValue: value,
-        convertedValue: valueInMmolL,
-        unit: 'mmol/L',
-      });
+      // console.log('Saving to HealthKit:', {
+      //   value,
+      //   date: date.toISOString(),
+      //   unit: 'mg/dL',
+      // });
 
       await new Promise<void>((resolve, reject) => {
         AppleHealthKit.saveBloodGlucoseSample(
@@ -433,7 +433,7 @@ export class HealthService {
               console.error('Error saving to HealthKit:', error);
               reject(new Error(error));
             } else {
-              console.log('Successfully saved to HealthKit:', value, 'mg/dL');
+              // console.log('Successfully saved to HealthKit:', value, 'mg/dL');
               resolve();
             }
           },
@@ -495,10 +495,10 @@ export class HealthService {
         unit: 'mg/dL',
       };
 
-      console.log('Querying HealthKit with date range:', {
-        startDate: options.startDate,
-        endDate: options.endDate,
-      });
+      // console.log('Querying HealthKit with date range:', {
+      //   startDate: options.startDate,
+      //   endDate: options.endDate,
+      // });
 
       const results = await new Promise<any[]>((resolve, reject) => {
         AppleHealthKit.getBloodGlucoseSamples(
@@ -513,7 +513,7 @@ export class HealthService {
         );
       });
 
-      console.log(`Retrieved ${results.length} samples from HealthKit`);
+      // console.log(`Retrieved ${results.length} samples from HealthKit`);
 
       // Filter out readings that already exist
       const newReadings = results.filter(sample => {
@@ -521,7 +521,7 @@ export class HealthService {
         return !existingTimestamps.has(timestamp);
       });
 
-      console.log(`Found ${newReadings.length} new readings to import`);
+      // console.log(`Found ${newReadings.length} new readings to import`);
 
       let importedCount = 0;
 
@@ -583,7 +583,7 @@ export class HealthService {
               );
               resolve(new Date(results[0].startDate));
             } else {
-              console.log('No blood glucose data found');
+              // console.log('No blood glucose data found');
               resolve(null);
             }
           },

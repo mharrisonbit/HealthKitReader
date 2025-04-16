@@ -15,8 +15,9 @@ import {
   Modal,
   Pressable,
   Button,
+  ViewStyle,
+  TextStyle,
 } from 'react-native';
-import {LineChart} from 'react-native-chart-kit';
 import {HealthService} from '../services/healthService';
 import {SettingsService} from '../services/settingsService';
 import {useNavigation} from '@react-navigation/native';
@@ -25,9 +26,12 @@ import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {useFocusEffect} from '@react-navigation/native';
 import {BloodGlucoseRanges} from '../services/settingsService';
-import AppleHealthKit from 'react-native-health';
 import {subDays, subHours} from 'date-fns';
 import {Reading} from '../types/Reading';
+import AppleHealthKit from 'react-native-health';
+import {LoadingIndicator} from '../components/LoadingIndicator';
+import {TimeRangeSelector} from '../components/TimeRangeSelector';
+import {BloodGlucoseChart} from '../components/BloodGlucoseChart';
 
 type RootStackParamList = {
   Home: undefined;
@@ -42,6 +46,117 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const healthService = HealthService.getInstance();
 const settingsService = SettingsService.getInstance();
 const databaseService = new DatabaseService();
+
+type HomeScreenStyles = {
+  container: ViewStyle;
+  header: ViewStyle;
+  headerLeft: ViewStyle;
+  headerRight: ViewStyle;
+  title: TextStyle;
+  subtitle: TextStyle;
+  chartToggles: ViewStyle;
+  chartToggle: ViewStyle;
+  activeToggle: ViewStyle;
+  toggleText: TextStyle;
+  activeToggleText: TextStyle;
+  actionButtons: ViewStyle;
+  addButton: ViewStyle;
+  addButtonText: TextStyle;
+  settingsButton: ViewStyle;
+  settingsButtonText: TextStyle;
+  content: ViewStyle;
+  chartContainer: ViewStyle;
+  chartWrapper: ViewStyle;
+  chart: ViewStyle;
+  readingsContainer: ViewStyle;
+  sectionTitle: TextStyle;
+  readingItem: ViewStyle;
+  readingContent: ViewStyle;
+  readingValue: TextStyle;
+  readingDate: TextStyle;
+  readingSource: TextStyle;
+  emptyState: ViewStyle;
+  emptyStateText: TextStyle;
+  emptyStateSubtext: TextStyle;
+  legendContainer: ViewStyle;
+  legendItem: ViewStyle;
+  legendColor: ViewStyle;
+  legendText: TextStyle;
+  sortToggle: ViewStyle;
+  sortToggleText: TextStyle;
+  editButton: ViewStyle;
+  deleteButton: ViewStyle;
+  editButtonText: TextStyle;
+  deleteButtonText: TextStyle;
+  loadingContainer: ViewStyle;
+  editModal: ViewStyle;
+  modalOverlay: ViewStyle;
+  editContent: ViewStyle;
+  editTitle: TextStyle;
+  editInput: ViewStyle;
+  buttonContainer: ViewStyle;
+  cancelButton: ViewStyle;
+  readingNotes: TextStyle;
+  popupOverlay: ViewStyle;
+  popupContent: ViewStyle;
+  popupTitle: TextStyle;
+  popupInfo: ViewStyle;
+  popupLabel: TextStyle;
+  popupValue: TextStyle;
+  closeButton: ViewStyle;
+  closeButtonText: TextStyle;
+  readingsSection: ViewStyle;
+  readingsList: ViewStyle;
+  chartContainerLandscape: ViewStyle;
+  popupContentLandscape: ViewStyle;
+  scrollContent: ViewStyle;
+  percentagesContainer: ViewStyle;
+  percentagesTitle: TextStyle;
+  percentagesRow: ViewStyle;
+  percentage: TextStyle;
+  trendContainer: ViewStyle;
+  trendTitle: TextStyle;
+  trendIndicator: ViewStyle;
+  trendText: TextStyle;
+  importProgress: ViewStyle;
+  importSpinner: ViewStyle;
+  importProgressText: TextStyle;
+  errorContainer: ViewStyle;
+  errorText: TextStyle;
+  footer: ViewStyle;
+  emptyChartContainer: ViewStyle;
+  emptyChartText: TextStyle;
+  chartLoadingContainer: ViewStyle;
+  readingColorIndicator: ViewStyle;
+  readingInfo: ViewStyle;
+  readingUnit: TextStyle;
+  readingTime: TextStyle;
+  a1cContainer: ViewStyle;
+  a1cTimeFrameButton: ViewStyle;
+  a1cTimeFrameButtonText: TextStyle;
+  a1cTimeFramePicker: ViewStyle;
+  a1cTimeFramePickerTitle: TextStyle;
+  a1cTimeFrameOptionsContainer: ViewStyle;
+  a1cTimeFrameOption: ViewStyle;
+  a1cTimeFrameOptionActive: ViewStyle;
+  a1cTimeFrameOptionText: TextStyle;
+  a1cTimeFrameOptionTextActive: TextStyle;
+  currentReadingContainer: ViewStyle;
+  currentReadingTitle: TextStyle;
+  currentReadingContent: ViewStyle;
+  currentReadingValue: TextStyle;
+  currentReadingTime: TextStyle;
+  currentReadingSource: TextStyle;
+  lastSyncTime: TextStyle;
+  popupScrollView: ViewStyle;
+};
+
+const timeRangeOptions = [
+  {label: '1 Hour', value: '1'},
+  {label: '3 Hours', value: '3'},
+  {label: '12 Hours', value: '12'},
+  {label: '24 Hours', value: '24'},
+];
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -59,10 +174,9 @@ export const HomeScreen: React.FC = () => {
     high: 180,
     useCustomRanges: false,
   });
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [isLoading, setIsLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingReading, setEditingReading] = useState<BloodGlucose | null>(
+  const [_isEditing, _setIsEditing] = useState(false);
+  const [_editingReading, _setEditingReading] = useState<BloodGlucose | null>(
     null,
   );
   const [selectedReading, setSelectedReading] = useState<BloodGlucose | null>(
@@ -79,6 +193,9 @@ export const HomeScreen: React.FC = () => {
   const [isLoadingHealthKitData, setIsLoadingHealthKitData] = useState(false);
   const [timePeriod, _setTimePeriod] = useState<'24h' | '7d' | '30d'>('24h');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [timeRange, setTimeRange] = useState(24);
+  const [_selectedTimeRange, setSelectedTimeRange] = useState<string>('24');
+  const [_isLoadingTimeRange, _setIsLoadingTimeRange] = useState(false);
   const [a1cTimeFrame, setA1cTimeFrame] = useState<
     '1w' | '1m' | '2m' | '3m' | '6m' | '1y'
   >('3m');
@@ -89,6 +206,7 @@ export const HomeScreen: React.FC = () => {
   const [isLoadingChart, setIsLoadingChart] = useState(false);
   const [hasPreviousData, setHasPreviousData] = useState(false);
   const [hasNextData, setHasNextData] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
   const [chartData, setChartData] = useState<{
     labels: string[];
@@ -114,8 +232,31 @@ export const HomeScreen: React.FC = () => {
     ],
   });
 
-  const loadReadings = async () => {
+  const calculateAverage = useCallback((readings: Reading[]): number => {
+    if (readings.length === 0) return 0;
+    const sum = readings.reduce(
+      (acc: number, reading: Reading) => acc + reading.value,
+      0,
+    );
+    return sum / readings.length;
+  }, []);
+
+  const formatTimeLabel = useCallback(
+    (date: Date) => {
+      if (timePeriod === '24h') {
+        return date.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+      return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+    },
+    [timePeriod],
+  );
+
+  const loadReadings = useCallback(async () => {
     try {
+      _setIsLoadingTimeRange(true);
       setIsLoading(true);
       setError(null);
       const allReadings = await databaseService.getAllReadings();
@@ -127,8 +268,12 @@ export const HomeScreen: React.FC = () => {
 
       // Limit to last 100 readings for better performance
       const limitedReadings = sortedReadings.slice(0, 100);
-
       setReadings(limitedReadings);
+
+      // Update last sync time if we have readings
+      if (sortedReadings.length > 0) {
+        setLastSyncTime(sortedReadings[0].timestamp);
+      }
 
       // After loading readings, check for new data in HealthKit
       if (Platform.OS === 'ios') {
@@ -163,12 +308,75 @@ export const HomeScreen: React.FC = () => {
           // Silently handle error
         }
       }
-    } catch (err) {
-      setError('Failed to load readings');
+    } catch (error) {
+      console.error('Error loading readings:', error);
     } finally {
       setIsLoading(false);
+      _setIsLoadingTimeRange(false);
     }
-  };
+  }, []);
+
+  const updateChartData = useCallback(async () => {
+    try {
+      setIsLoadingChart(true);
+      const allReadings = await databaseService.getAllReadings();
+
+      // Sort readings by date in descending order (newest first)
+      const sortedReadings = allReadings.sort(
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+      );
+
+      // Filter readings based on time range
+      const cutoffTime = new Date();
+      cutoffTime.setHours(cutoffTime.getHours() - timeRange);
+      const filteredReadings = sortedReadings.filter(
+        reading => reading.timestamp >= cutoffTime,
+      );
+
+      // Update chart data
+      setChartData({
+        labels: filteredReadings.map(r => formatTimeLabel(r.timestamp)),
+        datasets: [
+          {
+            data: filteredReadings.map(r => r.value),
+            strokeWidth: 2,
+          },
+          {
+            data: filteredReadings.map(() => {
+              const average = calculateAverage(filteredReadings);
+              return average ? parseFloat(average.toFixed(0)) : 0;
+            }),
+            strokeWidth: 1,
+            color: (opacity = 1) => `rgba(128, 128, 128, ${opacity})`,
+            withDots: false,
+          },
+        ],
+      });
+    } catch (error) {
+      console.error('Error loading chart data:', error);
+    } finally {
+      setIsLoadingChart(false);
+    }
+  }, [timeRange, formatTimeLabel, calculateAverage]);
+
+  // Effect to update chart when time range changes
+  useEffect(() => {
+    updateChartData();
+  }, [timeRange, updateChartData]);
+
+  // Load all data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadReadings();
+      updateChartData();
+    }, [loadReadings, updateChartData]),
+  );
+
+  const handleTimeRangeChange = useCallback((value: string) => {
+    const newTimeRange = parseInt(value, 10);
+    setTimeRange(newTimeRange);
+    setSelectedTimeRange(value);
+  }, []); // No dependencies needed as we're using the effect above to handle updates
 
   const handleImportFromHealth = async () => {
     try {
@@ -210,6 +418,7 @@ export const HomeScreen: React.FC = () => {
   useEffect(() => {
     const loadSettings = async () => {
       const savedRanges = await settingsService.getRanges();
+      const savedTimeRange = await settingsService.getTimeRange();
       setRanges({
         low: savedRanges.low,
         high: savedRanges.high,
@@ -217,6 +426,7 @@ export const HomeScreen: React.FC = () => {
         customLow: savedRanges.customLow,
         customHigh: savedRanges.customHigh,
       });
+      setTimeRange(savedTimeRange);
     };
 
     loadSettings();
@@ -230,14 +440,7 @@ export const HomeScreen: React.FC = () => {
     return () => {
       subscription.remove();
     };
-  }, []);
-
-  // Load readings when screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      loadReadings();
-    }, []),
-  );
+  }, [loadReadings]);
 
   const calculateA1C = (readings: BloodGlucose[]) => {
     if (readings.length === 0) return null;
@@ -339,16 +542,7 @@ export const HomeScreen: React.FC = () => {
   useEffect(() => {
     // Reload readings to ensure colors are updated
     loadReadings();
-  }, [ranges]);
-
-  const calculateAverage = useCallback((readings: Reading[]): number => {
-    if (readings.length === 0) return 0;
-    const sum = readings.reduce(
-      (acc: number, reading: Reading) => acc + reading.value,
-      0,
-    );
-    return sum / readings.length;
-  }, []);
+  }, [ranges, loadReadings]);
 
   const calculateReadingPercentages = (
     readings: BloodGlucose[],
@@ -405,13 +599,9 @@ export const HomeScreen: React.FC = () => {
     return [...readings].sort((a, b) => {
       const dateA = a.timestamp.getTime();
       const dateB = b.timestamp.getTime();
-      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+      return dateB - dateA;
     });
-  }, [readings, sortOrder]);
-
-  const sortReadings = useCallback((a: Reading, b: Reading): number => {
-    return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-  }, []);
+  }, [readings]);
 
   const getFilteredReadings = useCallback(async (): Promise<Reading[]> => {
     const allReadings = await databaseService.getAllReadings();
@@ -434,42 +624,8 @@ export const HomeScreen: React.FC = () => {
 
     return allReadings
       .filter((reading: Reading) => new Date(reading.timestamp) >= cutoffDate)
-      .sort(sortReadings);
-  }, [timePeriod, sortReadings]);
-
-  const formatTimeLabel = useCallback(
-    (date: Date) => {
-      if (timePeriod === '24h') {
-        return date.toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-      }
-      return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
-    },
-    [timePeriod],
-  );
-
-  const formatDateLabel = (date: Date) => {
-    return date.toLocaleDateString([], {
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const navigateToPreviousDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() - 1);
-    setSelectedDate(newDate);
-  };
-
-  const navigateToNextDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + 1);
-    if (newDate <= new Date()) {
-      setSelectedDate(newDate);
-    }
-  };
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [timePeriod]);
 
   const checkAvailableData = useCallback(async () => {
     const now = new Date();
@@ -541,138 +697,87 @@ export const HomeScreen: React.FC = () => {
     getFilteredReadings,
   ]);
 
-  const chartConfig = {
-    backgroundColor: '#ffffff',
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: '6',
-      strokeWidth: '2',
-      stroke: '#fff',
-    },
-    propsForBackgroundLines: {
-      strokeDasharray: '', // solid line
-    },
-    propsForLabels: {
-      fontSize: 10,
-    },
-    fillShadowGradient: '#4CAF50',
-    fillShadowGradientOpacity: 0.1,
-    yAxisInterval: 1,
-    fromZero: false,
-    segments: 5,
-    yAxisLabel: 'mg/dL',
-    yLabelsOffset: 10,
-    xLabelsOffset: -10,
-    withVerticalLines: false,
-    withHorizontalLines: true,
-    bezier: true,
-    minValue: ranges.low - 20, // Add some padding below the low range
-    maxValue: ranges.high + 20, // Add some padding above the high range
-    backgroundGradientFrom: '#ff6b6b',
-    backgroundGradientTo: '#4CAF50',
-    backgroundGradientFromOpacity: 0.2,
-    backgroundGradientToOpacity: 0.2,
-    backgroundGradientFromOffset: 0,
-    backgroundGradientToOffset: 1,
-    backgroundGradientFromStop:
-      (ranges.high - ranges.low) / (ranges.high + 20 - (ranges.low - 20)),
-    backgroundGradientToStop:
-      (ranges.high - ranges.low) / (ranges.high + 20 - (ranges.low - 20)),
-    width: isLandscape ? width - 32 : 350,
-    height: isLandscape ? height - 100 : 220,
-  };
-
-  const handleReadingPress = async (reading: BloodGlucose) => {
-    setSelectedReading(reading);
-    if (reading.sourceName === 'Apple Health') {
-      setIsLoadingHealthKitData(true);
-      try {
-        const options = {
-          startDate: new Date(reading.timestamp.getTime() - 1000).toISOString(), // 1 second before
-          endDate: new Date(reading.timestamp.getTime() + 1000).toISOString(), // 1 second after
-        };
-
-        const results = await new Promise<any[]>(resolve => {
-          AppleHealthKit.getBloodGlucoseSamples(
-            options,
-            (error: string, samples: any[]) => {
-              if (error) {
-                resolve([]);
-              } else {
-                resolve(samples);
-              }
-            },
-          );
-        });
-
-        if (results.length > 0) {
-          setHealthKitData(results[0]);
-        }
-      } catch (error) {
-        // Silently handle error
-      } finally {
-        setIsLoadingHealthKitData(false);
+  const handlePointPress = useCallback(
+    (data: {
+      index: number;
+      value: number;
+      dataset: any;
+      x: number;
+      y: number;
+      getColor: (opacity: number) => string;
+    }) => {
+      if (isLandscape) {
+        setSelectedReading(allReadings[data.index]);
       }
-    }
-  };
+    },
+    [isLandscape, allReadings],
+  );
 
-  const handleClosePopup = () => {
+  const handleCurrentReadingPress = useCallback(
+    async (reading: BloodGlucose) => {
+      setSelectedReading(reading);
+      if (reading.sourceName === 'Apple Health') {
+        setIsLoadingHealthKitData(true);
+        try {
+          const options = {
+            startDate: new Date(
+              reading.timestamp.getTime() - 1000,
+            ).toISOString(), // 1 second before
+            endDate: new Date(reading.timestamp.getTime() + 1000).toISOString(), // 1 second after
+          };
+
+          const results = await new Promise<any[]>(resolve => {
+            AppleHealthKit.getBloodGlucoseSamples(
+              options,
+              (error: string, samples: any[]) => {
+                if (error) {
+                  resolve([]);
+                } else {
+                  resolve(samples);
+                }
+              },
+            );
+          });
+
+          if (results.length > 0) {
+            setHealthKitData(results[0]);
+          }
+        } catch (error) {
+          // Silently handle error
+        } finally {
+          setIsLoadingHealthKitData(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const handleClosePopup = useCallback(() => {
     setSelectedReading(null);
     setHealthKitData(null);
-  };
+  }, []);
 
-  const handlePointPress = (data: {
-    index: number;
-    value: number;
-    dataset: any;
-    x: number;
-    y: number;
-    getColor: (opacity: number) => string;
-  }) => {
-    if (isLandscape) {
-      setSelectedReading(allReadings[data.index]);
-    }
-  };
+  const getReadingColor = useCallback(
+    (value: number) => {
+      const {low, high, useCustomRanges, customLow, customHigh} = ranges;
+      const effectiveLow =
+        useCustomRanges && customLow !== undefined ? customLow : low;
+      const effectiveHigh =
+        useCustomRanges && customHigh !== undefined ? customHigh : high;
 
-  const handleSaveEdit = async () => {
-    if (!editingReading) return;
-
-    try {
-      await databaseService.updateReading(editingReading);
-      await loadReadings();
-      setIsEditing(false);
-      setEditingReading(null);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update reading');
-    }
-  };
-
-  const getReadingColor = (value: number) => {
-    const {low, high, useCustomRanges, customLow, customHigh} = ranges;
-    const effectiveLow =
-      useCustomRanges && customLow !== undefined ? customLow : low;
-    const effectiveHigh =
-      useCustomRanges && customHigh !== undefined ? customHigh : high;
-
-    if (value < effectiveLow) {
-      return '#FF3B30'; // Red for low
-    } else if (value > effectiveHigh) {
-      return '#FF9500'; // Orange for high
-    } else {
-      return '#34C759'; // Green for normal
-    }
-  };
+      if (value < effectiveLow) {
+        return '#FF3B30'; // Red for low
+      } else if (value > effectiveHigh) {
+        return '#FF9500'; // Orange for high
+      } else {
+        return '#34C759'; // Green for normal
+      }
+    },
+    [ranges],
+  );
 
   if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
+    return <LoadingIndicator />;
   }
 
   return (
@@ -803,15 +908,6 @@ export const HomeScreen: React.FC = () => {
                 <View style={styles.headerRight}>
                   <View style={styles.actionButtons}>
                     <TouchableOpacity
-                      style={styles.sortToggle}
-                      onPress={() =>
-                        setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')
-                      }>
-                      <Text style={styles.sortToggleText}>
-                        {sortOrder === 'desc' ? 'Newest ↓' : 'Oldest ↑'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
                       style={styles.settingsButton}
                       onPress={() => navigation.navigate('Settings')}>
                       <Text style={styles.settingsButtonText}>⚙️</Text>
@@ -821,322 +917,160 @@ export const HomeScreen: React.FC = () => {
               </View>
             )}
 
-            <View
-              style={[
-                styles.chartContainer,
-                isLandscape && styles.chartContainerLandscape,
-              ]}>
-              {isLandscape && (
-                <View style={styles.chartNavigationContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.navigationButton,
-                      !hasPreviousData && styles.navigationButtonDisabled,
-                    ]}
-                    onPress={navigateToPreviousDay}
-                    disabled={!hasPreviousData}>
-                    <Text
-                      style={[
-                        styles.navigationButtonText,
-                        !hasPreviousData && styles.navigationButtonTextDisabled,
-                      ]}>
-                      ←
-                    </Text>
-                  </TouchableOpacity>
-                  <Text style={styles.dateLabel}>
-                    {formatDateLabel(selectedDate)}
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.navigationButton,
-                      !hasNextData && styles.navigationButtonDisabled,
-                    ]}
-                    onPress={navigateToNextDay}
-                    disabled={!hasNextData}>
-                    <Text
-                      style={[
-                        styles.navigationButtonText,
-                        !hasNextData && styles.navigationButtonTextDisabled,
-                      ]}>
-                      →
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              {isLoadingChart ? (
-                <View style={styles.chartLoadingContainer}>
-                  <ActivityIndicator size="large" color="#007AFF" />
-                </View>
-              ) : chartData.labels.length > 0 ? (
-                <LineChart
-                  data={chartData}
-                  width={chartConfig.width}
-                  height={chartConfig.height}
-                  chartConfig={chartConfig}
-                  getDotColor={(dataPoint, index) => {
-                    const value = chartData.datasets[0].data[index];
-                    const range = ranges;
-                    if (value < range.low) {
-                      return '#ff6b6b'; // Red for low
-                    } else if (value > range.high) {
-                      return '#ff6b6b'; // Red for high
-                    }
-                    return '#4CAF50'; // Green for normal
-                  }}
-                  onDataPointClick={handlePointPress}
-                  bezier
-                  style={styles.chart}
-                  withVerticalLines={false}
-                  withHorizontalLines={true}
-                  segments={5}
-                  fromZero={false}
-                  yAxisInterval={1}
-                  yAxisLabel="mg/dL"
-                  xLabelsOffset={-10}
-                  yLabelsOffset={10}
-                />
-              ) : (
-                <View style={styles.emptyChartContainer}>
-                  <Text style={styles.emptyChartText}>
-                    No readings for this day
-                  </Text>
-                </View>
-              )}
-              <View style={styles.legendContainer}>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#4CAF50'}]}
-                  />
-                  <Text style={styles.legendText}>Normal</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#ff6b6b'}]}
-                  />
-                  <Text style={styles.legendText}>High/Low</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#808080'}]}
-                  />
-                  <Text style={styles.legendText}>Average</Text>
-                </View>
-              </View>
+            <View style={styles.chartContainer}>
+              <TimeRangeSelector
+                options={timeRangeOptions}
+                selectedValue={timeRange}
+                onSelect={handleTimeRangeChange}
+              />
+              <BloodGlucoseChart
+                data={chartData}
+                isLoading={isLoadingChart}
+                ranges={ranges}
+                onPointPress={handlePointPress}
+              />
             </View>
 
             {!isLandscape && (
-              <View style={styles.readingsSection}>
-                <Text style={styles.sectionTitle}>Recent Readings</Text>
-                <ScrollView
-                  style={styles.readingsList}
-                  keyboardShouldPersistTaps="handled"
-                  keyboardDismissMode="on-drag">
-                  {allReadings.length > 0 ? (
-                    allReadings.map((reading, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.readingItem,
-                          {borderLeftColor: getReadingColor(reading.value)},
-                        ]}
-                        onPress={() => handleReadingPress(reading)}>
-                        <View style={styles.readingContent}>
-                          <Text style={styles.readingValue}>
-                            {reading.value} mg/dL
-                          </Text>
-                          <Text style={styles.readingDate}>
-                            {reading.timestamp.toLocaleString()}
-                          </Text>
-                          <Text style={styles.readingSource}>
-                            {reading.sourceName}
-                            {reading.sourceName === 'Apple Health' &&
-                              reading.notes && (
-                                <Text style={styles.readingNotes}>
-                                  {' '}
-                                  ({reading.notes})
-                                </Text>
-                              )}
-                          </Text>
-                          {reading.notes &&
-                            reading.sourceName !== 'Apple Health' && (
-                              <Text
-                                style={styles.readingNotes}
-                                numberOfLines={1}>
-                                {reading.notes}
-                              </Text>
-                            )}
-                        </View>
-                      </TouchableOpacity>
-                    ))
-                  ) : (
-                    <View style={styles.emptyState}>
-                      <Text style={styles.emptyStateText}>
-                        No readings available
+              <View style={styles.currentReadingContainer}>
+                <Text style={styles.currentReadingTitle}>Current Reading</Text>
+                {allReadings.length > 0 ? (
+                  <TouchableOpacity
+                    style={styles.currentReadingContent}
+                    onPress={() => handleCurrentReadingPress(allReadings[0])}>
+                    <Text
+                      style={[
+                        styles.currentReadingValue,
+                        {color: getReadingColor(allReadings[0].value)},
+                      ]}>
+                      {allReadings[0].value} mg/dL
+                    </Text>
+                    <Text style={styles.currentReadingTime}>
+                      {allReadings[0].timestamp.toLocaleString()}
+                    </Text>
+                    <Text style={styles.currentReadingSource}>
+                      {allReadings[0].sourceName}
+                    </Text>
+                    {lastSyncTime && (
+                      <Text style={styles.lastSyncTime}>
+                        Last sync: {lastSyncTime.toLocaleString()}
                       </Text>
-                      <Text style={styles.emptyStateSubtext}>
-                        Sync with HealthKit to import readings
-                      </Text>
-                    </View>
-                  )}
-                </ScrollView>
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>
+                      No readings available
+                    </Text>
+                    <Text style={styles.emptyStateSubtext}>
+                      Sync with HealthKit to import readings
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
           </View>
         </ScrollView>
       </Pressable>
 
-      <Modal
-        visible={isEditing}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          Keyboard.dismiss();
-          setIsEditing(false);
-          setEditingReading(null);
-        }}>
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            Keyboard.dismiss();
-            setIsEditing(false);
-            setEditingReading(null);
-          }}>
-          <Pressable
-            style={styles.editContent}
-            onPress={e => e.stopPropagation()}>
-            <Text style={styles.editTitle}>Edit Reading</Text>
-            <TextInput
-              style={styles.editInput}
-              value={editingReading?.value.toString()}
-              onChangeText={text => {
-                const value = parseFloat(text);
-                if (!isNaN(value) && editingReading) {
-                  setEditingReading({...editingReading, value});
-                }
-              }}
-              keyboardType="numeric"
-              placeholder="Value (mg/dL)"
-            />
-            <TextInput
-              style={[styles.editInput, {height: 100}]}
-              value={editingReading?.notes || ''}
-              onChangeText={text => {
-                if (editingReading) {
-                  setEditingReading({...editingReading, notes: text});
-                }
-              }}
-              placeholder="Notes (optional)"
-              multiline
-            />
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={[styles.editButton, styles.cancelButton]}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  setIsEditing(false);
-                  setEditingReading(null);
-                }}>
-                <Text style={styles.editButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => {
-                  Keyboard.dismiss();
-                  handleSaveEdit();
-                }}>
-                <Text style={styles.editButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       {selectedReading && (
-        <View style={styles.popupOverlay}>
-          <View
-            style={[
-              styles.popupContent,
-              isLandscape && styles.popupContentLandscape,
-            ]}>
-            <Text style={styles.popupTitle}>Reading Details</Text>
-            <View style={styles.popupInfo}>
-              <Text style={styles.popupLabel}>Value:</Text>
-              <Text
-                style={[
-                  styles.popupValue,
-                  {color: getReadingColor(selectedReading.value)},
-                ]}>
-                {selectedReading.value} mg/dL
-              </Text>
-            </View>
-            <View style={styles.popupInfo}>
-              <Text style={styles.popupLabel}>Date:</Text>
-              <Text style={styles.popupValue}>
-                {selectedReading.timestamp.toLocaleString()}
-              </Text>
-            </View>
-            <View style={styles.popupInfo}>
-              <Text style={styles.popupLabel}>Source:</Text>
-              <Text style={styles.popupValue}>
-                {selectedReading.sourceName}
-              </Text>
-            </View>
-            {selectedReading.notes && (
-              <View style={styles.popupInfo}>
-                <Text style={styles.popupLabel}>Notes:</Text>
-                <Text style={styles.popupValue}>{selectedReading.notes}</Text>
-              </View>
-            )}
-            {selectedReading.sourceName === 'Apple Health' && (
-              <>
-                {isLoadingHealthKitData ? (
+        <Modal
+          visible={!!selectedReading}
+          transparent
+          animationType="fade"
+          onRequestClose={handleClosePopup}>
+          <View style={styles.popupOverlay}>
+            <View style={styles.popupContent}>
+              <Text style={styles.popupTitle}>Reading Details</Text>
+              <ScrollView style={styles.popupScrollView}>
+                <View style={styles.popupInfo}>
+                  <Text style={styles.popupLabel}>Value:</Text>
+                  <Text
+                    style={[
+                      styles.popupValue,
+                      {color: getReadingColor(selectedReading.value)},
+                    ]}>
+                    {selectedReading.value} mg/dL
+                  </Text>
+                </View>
+                <View style={styles.popupInfo}>
+                  <Text style={styles.popupLabel}>Date:</Text>
+                  <Text style={styles.popupValue}>
+                    {selectedReading.timestamp.toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.popupInfo}>
+                  <Text style={styles.popupLabel}>Source:</Text>
+                  <Text style={styles.popupValue}>
+                    {selectedReading.sourceName}
+                  </Text>
+                </View>
+                {selectedReading.notes && (
                   <View style={styles.popupInfo}>
-                    <ActivityIndicator size="small" color="#007AFF" />
-                    <Text style={styles.popupLabel}>
-                      Loading HealthKit data...
-                    </Text>
-                  </View>
-                ) : healthKitData ? (
-                  <>
-                    <View style={styles.popupInfo}>
-                      <Text style={styles.popupLabel}>HealthKit ID:</Text>
-                      <Text style={styles.popupValue}>{healthKitData.id}</Text>
-                    </View>
-                    <View style={styles.popupInfo}>
-                      <Text style={styles.popupLabel}>Original Value:</Text>
-                      <Text style={styles.popupValue}>
-                        {healthKitData.value} {healthKitData.unit}
-                      </Text>
-                    </View>
-                    <View style={styles.popupInfo}>
-                      <Text style={styles.popupLabel}>Device:</Text>
-                      <Text style={styles.popupValue}>
-                        {healthKitData.device || 'Unknown'}
-                      </Text>
-                    </View>
-                    <View style={styles.popupInfo}>
-                      <Text style={styles.popupLabel}>Metadata:</Text>
-                      <Text style={styles.popupValue}>
-                        {JSON.stringify(healthKitData.metadata || {}, null, 2)}
-                      </Text>
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.popupInfo}>
-                    <Text style={styles.popupLabel}>
-                      No additional HealthKit data available
+                    <Text style={styles.popupLabel}>Notes:</Text>
+                    <Text style={styles.popupValue}>
+                      {selectedReading.notes}
                     </Text>
                   </View>
                 )}
-              </>
-            )}
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={handleClosePopup}>
-              <Text style={styles.closeButtonText}>Close</Text>
-            </TouchableOpacity>
+                {selectedReading.sourceName === 'Apple Health' && (
+                  <>
+                    {isLoadingHealthKitData ? (
+                      <View style={styles.popupInfo}>
+                        <ActivityIndicator size="small" color="#007AFF" />
+                        <Text style={styles.popupLabel}>
+                          Loading HealthKit data...
+                        </Text>
+                      </View>
+                    ) : healthKitData ? (
+                      <>
+                        <View style={styles.popupInfo}>
+                          <Text style={styles.popupLabel}>HealthKit ID:</Text>
+                          <Text style={styles.popupValue}>
+                            {healthKitData.id}
+                          </Text>
+                        </View>
+                        <View style={styles.popupInfo}>
+                          <Text style={styles.popupLabel}>Original Value:</Text>
+                          <Text style={styles.popupValue}>
+                            {healthKitData.value} {healthKitData.unit}
+                          </Text>
+                        </View>
+                        <View style={styles.popupInfo}>
+                          <Text style={styles.popupLabel}>Device:</Text>
+                          <Text style={styles.popupValue}>
+                            {healthKitData.device || 'Unknown'}
+                          </Text>
+                        </View>
+                        <View style={styles.popupInfo}>
+                          <Text style={styles.popupLabel}>Metadata:</Text>
+                          <Text style={styles.popupValue}>
+                            {JSON.stringify(
+                              healthKitData.metadata || {},
+                              null,
+                              2,
+                            )}
+                          </Text>
+                        </View>
+                      </>
+                    ) : (
+                      <View style={styles.popupInfo}>
+                        <Text style={styles.popupLabel}>
+                          No additional HealthKit data available
+                        </Text>
+                      </View>
+                    )}
+                  </>
+                )}
+              </ScrollView>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={handleClosePopup}>
+                <Text style={styles.closeButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </Modal>
       )}
 
       {isImporting && importProgress && (
@@ -1305,10 +1239,13 @@ export const HomeScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<HomeScreenStyles>({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   header: {
     flexDirection: 'row',
@@ -1405,6 +1342,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    alignItems: 'center',
   },
   chart: {
     marginVertical: 8,
@@ -1580,7 +1518,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     padding: 12,
     marginBottom: 16,
-    fontSize: 16,
     backgroundColor: '#fff',
   },
   buttonContainer: {
@@ -1599,30 +1536,23 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   popupOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1000,
   },
   popupContent: {
     backgroundColor: '#fff',
-    padding: 20,
     borderRadius: 10,
+    padding: 20,
     width: '80%',
     maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    maxHeight: '80%',
+    justifyContent: 'space-between',
+  },
+  popupScrollView: {
+    maxHeight: '70%',
+    marginBottom: 16,
   },
   popupTitle: {
     fontSize: 20,
@@ -1630,7 +1560,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
     color: '#333',
-  },
+  } as TextStyle,
   popupInfo: {
     marginBottom: 12,
   },
@@ -1647,7 +1577,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     padding: 12,
     borderRadius: 8,
-    marginTop: 16,
+    marginTop: 0,
   },
   closeButtonText: {
     color: '#fff',
@@ -1671,9 +1601,6 @@ const styles = StyleSheet.create({
   popupContentLandscape: {
     width: '60%',
     maxWidth: 500,
-  },
-  scrollContent: {
-    flexGrow: 1,
   },
   percentagesContainer: {
     marginTop: 8,
@@ -1761,128 +1688,28 @@ const styles = StyleSheet.create({
     height: 220,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'transparent',
     borderRadius: 16,
+    marginVertical: 8,
   },
   emptyChartText: {
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-  },
-  timePeriodContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 16,
-    gap: 8,
-  },
-  timePeriodButton: {
+    width: '100%',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-  },
-  timePeriodButtonActive: {
-    backgroundColor: '#007AFF',
-  },
-  timePeriodButtonText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  timePeriodButtonTextActive: {
-    color: '#fff',
-  },
-  a1cContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  a1cTimeFrameButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: '#f5f5f5',
-  },
-  a1cTimeFrameButtonText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  a1cTimeFramePicker: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    width: '80%',
-    maxWidth: 300,
-    maxHeight: '80%',
-  },
-  a1cTimeFramePickerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-    color: '#333',
-  },
-  a1cTimeFrameOptionsContainer: {
-    maxHeight: 300, // Set a fixed max height for the scrollable area
-  },
-  a1cTimeFrameOption: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: '#f5f5f5',
-  },
-  a1cTimeFrameOptionActive: {
-    backgroundColor: '#007AFF',
-  },
-  a1cTimeFrameOptionText: {
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-  },
-  a1cTimeFrameOptionTextActive: {
-    color: '#fff',
-  },
-  chartNavigationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 16,
-  },
-  navigationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  navigationButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  navigationButtonText: {
-    fontSize: 20,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  navigationButtonTextDisabled: {
-    color: '#666',
-  },
-  dateLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    minWidth: 100,
-    textAlign: 'center',
   },
   chartLoadingContainer: {
-    width: '100%',
-    height: 220,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(245, 245, 245, 0.9)',
     borderRadius: 16,
+    zIndex: 1,
   },
   readingColorIndicator: {
     width: 16,
@@ -1900,5 +1727,104 @@ const styles = StyleSheet.create({
   readingTime: {
     fontSize: 14,
     color: '#666',
+  },
+  a1cContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  a1cTimeFrameButton: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 4,
+  },
+  a1cTimeFrameButtonText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  a1cTimeFramePicker: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    width: '80%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  a1cTimeFramePickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  } as TextStyle,
+  a1cTimeFrameOptionsContainer: {
+    flex: 1,
+  },
+  a1cTimeFrameOption: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 4,
+  },
+  a1cTimeFrameOptionActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  a1cTimeFrameOptionText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  a1cTimeFrameOptionTextActive: {
+    color: '#fff',
+  },
+  currentReadingContainer: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  currentReadingTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#333',
+  },
+  currentReadingContent: {
+    backgroundColor: '#f5f5f5',
+    padding: 16,
+    borderRadius: 8,
+  },
+  currentReadingValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  currentReadingTime: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  currentReadingSource: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  lastSyncTime: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  chartWrapper: {
+    marginHorizontal: 16,
+    marginVertical: 8,
   },
 });
