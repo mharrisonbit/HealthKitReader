@@ -1,6 +1,6 @@
 # RN HealthKit - Blood Glucose Tracker
 
-A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with device health platforms (Apple HealthKit for iOS and Google Fit for Android).
+A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with Apple HealthKit for iOS.(Although made to be for both apple and android it was not tested or has never been built to an android device at this time).
 
 ## Detailed Application Overview
 
@@ -25,12 +25,6 @@ A comprehensive React Native application for tracking and managing blood glucose
     - Automatic background synchronization
     - Permission management for health data access
 
-  - **Android Integration**
-    - Google Fit integration
-    - Import and export blood glucose data
-    - Maintain data synchronization
-    - Handle Android-specific permissions
-
 #### 2. Data Visualization
 
 - **List View**
@@ -47,13 +41,13 @@ A comprehensive React Native application for tracking and managing blood glucose
 
 - **Chart View**
   - Interactive line chart for trend analysis
-  - Default 7-day view with customization options
+  - Multiple time period views (24 hours, 7 days, 30 days)
   - Visual elements:
     - Individual reading points
     - High/low range indicators
     - Trend lines
   - Time range selection
-  - Zoom and pan capabilities
+  - Real-time average calculation
 
 #### 3. Customization Features
 
@@ -64,7 +58,6 @@ A comprehensive React Native application for tracking and managing blood glucose
     - High range (> 180 mg/dL default)
   - User-adjustable ranges in settings
   - Visual feedback based on ranges
-  - Alert thresholds configuration
 
 #### 4. Data Storage and Management
 
@@ -77,12 +70,11 @@ A comprehensive React Native application for tracking and managing blood glucose
   - Automatic backup handling
 
 - **Data Synchronization**
-  - Two-way sync with health platforms
+  - Two-way sync with HealthKit
   - Automatic import of new readings
   - Manual import option
   - Duplicate prevention
   - Conflict resolution
-  - Background sync capability
 
 #### 5. User Interface
 
@@ -93,21 +85,14 @@ A comprehensive React Native application for tracking and managing blood glucose
   - Visual status indicators
   - Navigation to key features
   - Recent activity summary
-  - **Landscape Mode Features**
-    - 24-hour chart view with day-by-day navigation
-    - Interactive date selection for viewing historical data
-    - Automatic loading indicators during data fetch
-    - Navigation controls to move between days with data
-    - Disabled navigation when no more data is available
-    - Optimized chart display for landscape orientation
-    - Hidden import button in landscape mode for better space utilization
+  - Time period selection
+  - Data import functionality
 
 - **Settings Screen**
   - Range customization
-  - Health platform permissions
+  - HealthKit permissions
   - App preferences
   - Data management options
-  - User preferences
 
 ### Development and Release Mode Configuration
 
@@ -154,22 +139,15 @@ npx react-native run-android --variant=release
 - **Platform-Specific Features**
 
   - iOS:
-
     - HealthKit integration
     - Native iOS UI components
     - iOS-specific permissions
     - Background processing
 
-  - Android:
-    - Google Fit integration
-    - Material Design components
-    - Android-specific permissions
-    - Background services
-
 #### 7. Data Privacy and Security
 
 - Local storage of sensitive health data
-- Secure handling of health platform permissions
+- Secure handling of HealthKit permissions
 - User-controlled data sharing
 - No external server communication
 - Data encryption at rest
@@ -178,7 +156,7 @@ npx react-native run-android --variant=release
 
 - Graceful handling of:
   - Network connectivity issues
-  - Health platform permission denials
+  - HealthKit permission denials
   - Data synchronization conflicts
   - Storage errors
 - Automatic retry mechanisms
@@ -188,15 +166,37 @@ npx react-native run-android --variant=release
 ## Features
 
 - **Manual Entry**: Add blood glucose readings with custom notes
-- **Health Data Integration**:
-  - iOS: Sync with Apple HealthKit
-  - Android: Sync with Google Fit
+- **Health Data Integration**: Sync with Apple HealthKit
 - **Data Visualization**:
   - List view of all readings
   - Chart view showing trends over time
 - **Customizable Ranges**: Set custom low and high blood glucose ranges
 - **Local Storage**: All data is stored locally using SQLite
 - **Development Tools**: Integrated with Reactotron for debugging
+
+## Recent Updates
+
+### Enhanced Chart Functionality
+
+- Independent chart data fetching for each time period
+- Improved data accuracy with fresh database queries
+- Optimized chart rendering for better performance
+- Added support for multiple time periods (24 hours, 7 days, 30 days)
+- Real-time average calculation for selected time period
+
+### Improved Data Management
+
+- Removed duplicate import functionality from settings screen
+- Streamlined data import process in home screen
+- Enhanced error handling for data operations
+- Optimized database queries for better performance
+
+### UI/UX Improvements
+
+- Redesigned time period selection interface
+- Enhanced chart navigation controls
+- Improved error message display
+- Better visual feedback for user actions
 
 ## Prerequisites
 
@@ -316,16 +316,6 @@ The app requires the following HealthKit permissions:
 
 These permissions are requested when the app first launches. Users can manage these permissions in their device's Health app settings.
 
-### Android Permissions
-
-The app requires the following Google Fit permissions:
-
-- Fitness Activity Read
-- Fitness Body Read
-- Fitness Blood Glucose Read
-
-These permissions are requested when the app first launches. Users can manage these permissions in their device's Google Fit settings.
-
 ## Project Structure
 
 ```
@@ -389,3 +379,202 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Support
 
 For support, please open an issue in the GitHub repository or contact the maintainers.
+
+## Testing
+
+### Test Suite Overview
+
+The application includes a comprehensive test suite covering:
+
+1. **Component Tests**
+
+   - HomeScreen
+   - SettingsScreen
+   - ReminderScreen
+   - AddReadingScreen
+   - EditReadingScreen
+   - App component
+
+2. **Service Tests**
+
+   - DatabaseService
+   - HealthService
+   - SettingsService
+   - A1CService
+   - ChartService
+   - NotificationService
+
+3. **Utility Tests**
+
+   - Date/time formatting
+   - A1C calculations
+   - Range classification
+   - Time frame calculations
+
+4. **Type Tests**
+
+   - BloodGlucose
+   - BloodGlucoseRanges
+   - TimeFrame
+   - ChartData
+   - NotificationChannel
+
+5. **Theme Tests**
+   - Color validation
+   - Typography
+   - Spacing
+   - Shadows
+   - Border radius
+
+### Running Tests
+
+1. **Install Testing Dependencies**
+
+   ```bash
+   npm install --save-dev @testing-library/react-native @testing-library/jest-native
+   ```
+
+2. **Run All Tests**
+
+   ```bash
+   npm test
+   ```
+
+3. **Run Specific Test Files**
+
+   ```bash
+   # Run component tests
+   npm test -- HomeScreen.test.tsx
+
+   # Run service tests
+   npm test -- database.test.ts
+
+   # Run utility tests
+   npm test -- utils.test.ts
+   ```
+
+4. **Run Tests with Coverage**
+
+   ```bash
+   npm test -- --coverage
+   ```
+
+### Test Structure
+
+Each test file follows a consistent structure:
+
+```typescript
+describe('Component/Service Name', () => {
+  beforeEach(() => {
+    // Setup and mock initialization
+  });
+
+  it('should handle specific functionality', () => {
+    // Test implementation
+  });
+
+  it('should handle edge cases', () => {
+    // Edge case testing
+  });
+
+  it('should handle errors gracefully', () => {
+    // Error handling testing
+  });
+});
+```
+
+### Testing Best Practices
+
+1. **Component Testing**
+
+   - Test rendering of all UI elements
+   - Verify user interactions
+   - Check state changes
+   - Validate error handling
+   - Test navigation
+
+2. **Service Testing**
+
+   - Mock external dependencies
+   - Test all public methods
+   - Verify error handling
+   - Check data transformations
+   - Validate singleton patterns
+
+3. **Utility Testing**
+
+   - Test all exported functions
+   - Verify edge cases
+   - Check type safety
+   - Validate calculations
+
+4. **Type Testing**
+   - Verify required properties
+   - Check optional properties
+   - Validate type constraints
+   - Test type compatibility
+
+### Continuous Integration
+
+The test suite is integrated with the CI pipeline:
+
+1. **Pre-commit Hooks**
+
+   - Run linting
+   - Execute quick tests
+   - Check type definitions
+
+2. **Pull Request Checks**
+
+   - Run full test suite
+   - Generate coverage report
+   - Verify type safety
+   - Check for breaking changes
+
+3. **Release Process**
+   - Full test suite execution
+   - Coverage threshold verification
+   - Performance benchmarks
+   - Type checking
+
+### Debugging Tests
+
+1. **Using Jest Debugger**
+
+   ```bash
+   npm test -- --debug
+   ```
+
+2. **Debugging Specific Tests**
+
+   ```bash
+   npm test -- --testNamePattern="specific test name"
+   ```
+
+3. **Viewing Coverage Report**
+
+   ```bash
+   npm test -- --coverage --watchAll=false
+   ```
+
+### Test Maintenance
+
+1. **Adding New Tests**
+
+   - Follow existing patterns
+   - Include edge cases
+   - Test error scenarios
+   - Maintain coverage
+
+2. **Updating Tests**
+
+   - Update when features change
+   - Maintain test isolation
+   - Keep mocks current
+   - Update type definitions
+
+3. **Test Documentation**
+   - Document test purpose
+   - Explain complex scenarios
+   - Note edge cases
+   - Document mock setup
