@@ -18,7 +18,6 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import {LineChart} from 'react-native-chart-kit';
 import {HealthService} from '../services/healthService';
 import {SettingsService} from '../services/settingsService';
 import {useNavigation} from '@react-navigation/native';
@@ -30,6 +29,9 @@ import {BloodGlucoseRanges} from '../services/settingsService';
 import {subDays, subHours} from 'date-fns';
 import {Reading} from '../types/Reading';
 import AppleHealthKit from 'react-native-health';
+import {LoadingIndicator} from '../components/LoadingIndicator';
+import {TimeRangeSelector} from '../components/TimeRangeSelector';
+import {BloodGlucoseChart} from '../components/BloodGlucoseChart';
 
 type RootStackParamList = {
   Home: undefined;
@@ -64,6 +66,7 @@ type HomeScreenStyles = {
   settingsButtonText: TextStyle;
   content: ViewStyle;
   chartContainer: ViewStyle;
+  chartWrapper: ViewStyle;
   chart: ViewStyle;
   readingsContainer: ViewStyle;
   sectionTitle: TextStyle;
@@ -123,17 +126,6 @@ type HomeScreenStyles = {
   footer: ViewStyle;
   emptyChartContainer: ViewStyle;
   emptyChartText: TextStyle;
-  timeRangeContainer: ViewStyle;
-  timeRangeOption: ViewStyle;
-  timeRangeOptionSelected: ViewStyle;
-  timeRangeOptionText: TextStyle;
-  timeRangeOptionTextSelected: TextStyle;
-  chartNavigationContainer: ViewStyle;
-  navigationButton: ViewStyle;
-  navigationButtonDisabled: ViewStyle;
-  navigationButtonText: TextStyle;
-  navigationButtonTextDisabled: TextStyle;
-  dateLabel: TextStyle;
   chartLoadingContainer: ViewStyle;
   readingColorIndicator: ViewStyle;
   readingInfo: ViewStyle;
@@ -158,6 +150,13 @@ type HomeScreenStyles = {
   lastSyncTime: TextStyle;
   popupScrollView: ViewStyle;
 };
+
+const timeRangeOptions = [
+  {label: '1 Hour', value: '1'},
+  {label: '3 Hours', value: '3'},
+  {label: '12 Hours', value: '12'},
+  {label: '24 Hours', value: '24'},
+];
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -378,13 +377,6 @@ export const HomeScreen: React.FC = () => {
     setTimeRange(newTimeRange);
     setSelectedTimeRange(value);
   }, []); // No dependencies needed as we're using the effect above to handle updates
-
-  const timeRangeOptions = [
-    {label: '1 Hour', value: '1'},
-    {label: '3 Hours', value: '3'},
-    {label: '12 Hours', value: '12'},
-    {label: '24 Hours', value: '24'},
-  ];
 
   const handleImportFromHealth = async () => {
     try {
@@ -635,27 +627,6 @@ export const HomeScreen: React.FC = () => {
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [timePeriod]);
 
-  const formatDateLabel = (date: Date) => {
-    return date.toLocaleDateString([], {
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const navigateToPreviousDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() - 1);
-    setSelectedDate(newDate);
-  };
-
-  const navigateToNextDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + 1);
-    if (newDate <= new Date()) {
-      setSelectedDate(newDate);
-    }
-  };
-
   const checkAvailableData = useCallback(async () => {
     const now = new Date();
     const allReadings = await databaseService.getAllReadings();
@@ -725,51 +696,6 @@ export const HomeScreen: React.FC = () => {
     formatTimeLabel,
     getFilteredReadings,
   ]);
-
-  const chartConfig = {
-    backgroundColor: '#ffffff',
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForDots: {
-      r: '6',
-      strokeWidth: '2',
-      stroke: '#fff',
-    },
-    propsForBackgroundLines: {
-      strokeDasharray: '', // solid line
-    },
-    propsForLabels: {
-      fontSize: 10,
-    },
-    fillShadowGradient: '#4CAF50',
-    fillShadowGradientOpacity: 0.1,
-    yAxisInterval: 1,
-    fromZero: false,
-    segments: 5,
-    yAxisLabel: 'mg/dL',
-    yLabelsOffset: 10,
-    xLabelsOffset: -10,
-    withVerticalLines: false,
-    withHorizontalLines: true,
-    bezier: true,
-    minValue: ranges.low - 20, // Add some padding below the low range
-    maxValue: ranges.high + 20, // Add some padding above the high range
-    backgroundGradientFrom: '#ff6b6b',
-    backgroundGradientTo: '#4CAF50',
-    backgroundGradientFromOpacity: 0.2,
-    backgroundGradientToOpacity: 0.2,
-    backgroundGradientFromOffset: 0,
-    backgroundGradientToOffset: 1,
-    backgroundGradientFromStop:
-      (ranges.high - ranges.low) / (ranges.high + 20 - (ranges.low - 20)),
-    backgroundGradientToStop:
-      (ranges.high - ranges.low) / (ranges.high + 20 - (ranges.low - 20)),
-    width: isLandscape ? width - 32 : 350,
-    height: isLandscape ? height - 100 : 220,
-  };
 
   const handlePointPress = useCallback(
     (data: {
@@ -851,11 +777,7 @@ export const HomeScreen: React.FC = () => {
   );
 
   if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
+    return <LoadingIndicator />;
   }
 
   return (
@@ -995,128 +917,18 @@ export const HomeScreen: React.FC = () => {
               </View>
             )}
 
-            <View
-              style={[
-                styles.chartContainer,
-                isLandscape && styles.chartContainerLandscape,
-              ]}>
-              {isLandscape && (
-                <View style={styles.chartNavigationContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.navigationButton,
-                      !hasPreviousData && styles.navigationButtonDisabled,
-                    ]}
-                    onPress={navigateToPreviousDay}
-                    disabled={!hasPreviousData}>
-                    <Text
-                      style={[
-                        styles.navigationButtonText,
-                        !hasPreviousData && styles.navigationButtonTextDisabled,
-                      ]}>
-                      ←
-                    </Text>
-                  </TouchableOpacity>
-                  <Text style={styles.dateLabel}>
-                    {formatDateLabel(selectedDate)}
-                  </Text>
-                  <TouchableOpacity
-                    style={[
-                      styles.navigationButton,
-                      !hasNextData && styles.navigationButtonDisabled,
-                    ]}
-                    onPress={navigateToNextDay}
-                    disabled={!hasNextData}>
-                    <Text
-                      style={[
-                        styles.navigationButtonText,
-                        !hasNextData && styles.navigationButtonTextDisabled,
-                      ]}>
-                      →
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              <View style={styles.timeRangeContainer}>
-                {timeRangeOptions.map(option => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.timeRangeOption,
-                      timeRange === parseInt(option.value, 10) &&
-                        styles.timeRangeOptionSelected,
-                    ]}
-                    onPress={() => handleTimeRangeChange(option.value)}>
-                    <Text
-                      style={[
-                        styles.timeRangeOptionText,
-                        timeRange === parseInt(option.value, 10) &&
-                          styles.timeRangeOptionTextSelected,
-                      ]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {isLoadingChart ? (
-                <View style={styles.chartLoadingContainer}>
-                  <ActivityIndicator size="large" color="#007AFF" />
-                </View>
-              ) : chartData.labels.length > 0 ? (
-                <LineChart
-                  data={chartData}
-                  width={chartConfig.width}
-                  height={chartConfig.height}
-                  chartConfig={chartConfig}
-                  getDotColor={(dataPoint, index) => {
-                    const value = chartData.datasets[0].data[index];
-                    const range = ranges;
-                    if (value < range.low) {
-                      return '#ff6b6b'; // Red for low
-                    } else if (value > range.high) {
-                      return '#ff6b6b'; // Red for high
-                    }
-                    return '#4CAF50'; // Green for normal
-                  }}
-                  onDataPointClick={handlePointPress}
-                  bezier
-                  style={styles.chart}
-                  withVerticalLines={false}
-                  withHorizontalLines={true}
-                  segments={5}
-                  fromZero={false}
-                  yAxisInterval={1}
-                  yAxisLabel="mg/dL"
-                  xLabelsOffset={-10}
-                  yLabelsOffset={10}
-                />
-              ) : (
-                <View style={styles.emptyChartContainer}>
-                  <Text style={styles.emptyChartText}>
-                    No readings for this day
-                  </Text>
-                </View>
-              )}
-              <View style={styles.legendContainer}>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#4CAF50'}]}
-                  />
-                  <Text style={styles.legendText}>Normal</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#ff6b6b'}]}
-                  />
-                  <Text style={styles.legendText}>High/Low</Text>
-                </View>
-                <View style={styles.legendItem}>
-                  <View
-                    style={[styles.legendColor, {backgroundColor: '#808080'}]}
-                  />
-                  <Text style={styles.legendText}>Average</Text>
-                </View>
-              </View>
+            <View style={styles.chartContainer}>
+              <TimeRangeSelector
+                options={timeRangeOptions}
+                selectedValue={timeRange}
+                onSelect={handleTimeRangeChange}
+              />
+              <BloodGlucoseChart
+                data={chartData}
+                isLoading={isLoadingChart}
+                ranges={ranges}
+                onPointPress={handlePointPress}
+              />
             </View>
 
             {!isLandscape && (
@@ -1432,6 +1244,9 @@ const styles = StyleSheet.create<HomeScreenStyles>({
     flex: 1,
     backgroundColor: '#fff',
   },
+  scrollContent: {
+    flexGrow: 1,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1527,6 +1342,7 @@ const styles = StyleSheet.create<HomeScreenStyles>({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    alignItems: 'center',
   },
   chart: {
     marginVertical: 8,
@@ -1702,7 +1518,6 @@ const styles = StyleSheet.create<HomeScreenStyles>({
     borderRadius: 4,
     padding: 12,
     marginBottom: 16,
-    fontSize: 16,
     backgroundColor: '#fff',
   },
   buttonContainer: {
@@ -1786,9 +1601,6 @@ const styles = StyleSheet.create<HomeScreenStyles>({
   popupContentLandscape: {
     width: '60%',
     maxWidth: 500,
-  },
-  scrollContent: {
-    flexGrow: 1,
   },
   percentagesContainer: {
     marginTop: 8,
@@ -1876,80 +1688,28 @@ const styles = StyleSheet.create<HomeScreenStyles>({
     height: 220,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'transparent',
     borderRadius: 16,
+    marginVertical: 8,
   },
   emptyChartText: {
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-  },
-  timeRangeContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-    justifyContent: 'center',
-  },
-  timeRangeOption: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  timeRangeOptionSelected: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  timeRangeOptionText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  timeRangeOptionTextSelected: {
-    color: '#fff',
-  },
-  chartNavigationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 16,
-  },
-  navigationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#007AFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  navigationButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  navigationButtonText: {
-    fontSize: 20,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  navigationButtonTextDisabled: {
-    color: '#666',
-  },
-  dateLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    minWidth: 100,
-    textAlign: 'center',
+    width: '100%',
+    paddingHorizontal: 16,
   },
   chartLoadingContainer: {
-    width: '100%',
-    height: 220,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(245, 245, 245, 0.9)',
     borderRadius: 16,
+    zIndex: 1,
   },
   readingColorIndicator: {
     width: 16,
@@ -2062,5 +1822,9 @@ const styles = StyleSheet.create<HomeScreenStyles>({
     color: '#999',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  chartWrapper: {
+    marginHorizontal: 16,
+    marginVertical: 8,
   },
 });

@@ -23,5 +23,5 @@ if (__DEV__ && reactotron) {
   reactotron.clear();
 
   // Log when connected
-  console.log('Reactotron Connected');
+  // console.log('Reactotron Connected');
 }

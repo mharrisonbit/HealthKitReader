@@ -48,7 +48,7 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   };
 
   useEffect(() => {
-    console.log({AppleHealthKit});
+    // console.log({AppleHealthKit});
     const unsubscribe = navigation.addListener('focus', () => {
       loadReadings();
     });
