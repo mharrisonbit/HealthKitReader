@@ -37,7 +37,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     low: 70,
     high: 180,
   });
-  const [isResyncing, setIsResyncing] = useState(false);
+
+  const commonRanges = [
+    {label: 'Standard', low: 70, high: 180},
+    {label: 'Tight Control', low: 80, high: 140},
+    {label: 'Liberal', low: 60, high: 200},
+    {label: 'ADA Guidelines', low: 70, high: 180},
+    {label: 'AACE Guidelines', low: 70, high: 180},
+  ];
+
   const serviceName = Platform.OS === 'ios' ? 'HealthKit' : 'Google Fit';
 
   useEffect(() => {
@@ -61,24 +69,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     }
   };
 
-  const handleRangeChange = (type: 'low' | 'high', value: string) => {
-    const numValue = parseInt(value, 10);
-    if (!isNaN(numValue)) {
-      setTempRanges(prev => ({
-        ...prev,
-        [type]: numValue,
-      }));
-    }
-  };
-
-  const handleSaveRanges = async () => {
+  const handleRangeSelect = async (selectedRange: {
+    low: number;
+    high: number;
+  }) => {
     try {
       await settingsService.updateRanges({
         ...ranges,
-        customLow: tempRanges.low,
-        customHigh: tempRanges.high,
+        customLow: selectedRange.low,
+        customHigh: selectedRange.high,
       });
-      Alert.alert('Success', 'Ranges saved successfully');
+      setTempRanges(selectedRange);
+      Alert.alert('Success', 'Ranges updated successfully');
     } catch (error) {
       console.error('Error saving ranges:', error);
       Alert.alert('Error', 'Failed to save ranges');
@@ -135,44 +137,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     );
   };
 
-  const handleResyncHealthKit = async () => {
-    if (!healthService) {
-      Alert.alert('Error', `${serviceName} is not available on this device.`);
-      return;
-    }
-
-    setIsResyncing(true);
-    try {
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-
-      // Start importing from 3 months ago
-      const {importedCount, duplicateCount} =
-        await healthService.importBloodGlucoseInBatches(
-          threeMonthsAgo,
-          new Date(),
-          progress => {
-            console.log('Import progress:', progress);
-          },
-        );
-
-      Alert.alert(
-        'Success',
-        `Successfully imported ${importedCount} readings. ${duplicateCount} duplicates were skipped.`,
-        [{text: 'OK'}],
-      );
-    } catch (error) {
-      console.error('Error resyncing:', error);
-      Alert.alert(
-        'Error',
-        `Failed to import ${serviceName} data. Please check your permissions and try again.`,
-        [{text: 'OK'}],
-      );
-    } finally {
-      setIsResyncing(false);
-    }
-  };
-
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.container}>
       <Pressable style={styles.container} onPress={Keyboard.dismiss}>
@@ -200,30 +164,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
             </View>
 
             {ranges.useCustomRanges && (
-              <View style={styles.rangeInputs}>
-                <View style={styles.rangeInput}>
-                  <Text style={styles.rangeLabel}>Low (mg/dL)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={tempRanges?.low?.toString() ?? '70'}
-                    onChangeText={value => handleRangeChange('low', value)}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={styles.rangeInput}>
-                  <Text style={styles.rangeLabel}>High (mg/dL)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={tempRanges?.high?.toString() ?? '180'}
-                    onChangeText={value => handleRangeChange('high', value)}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <TouchableOpacity
-                  style={styles.saveButton}
-                  onPress={handleSaveRanges}>
-                  <Text style={styles.saveButtonText}>Save Ranges</Text>
-                </TouchableOpacity>
+              <View style={styles.rangeOptions}>
+                {commonRanges.map((range, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.rangeOption,
+                      tempRanges.low === range.low &&
+                        tempRanges.high === range.high &&
+                        styles.rangeOptionSelected,
+                    ]}
+                    onPress={() => handleRangeSelect(range)}>
+                    <Text style={styles.rangeOptionLabel}>{range.label}</Text>
+                    <Text style={styles.rangeOptionValues}>
+                      {range.low} - {range.high} mg/dL
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
@@ -231,7 +188,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Data Management</Text>
             <Text style={styles.sectionDescription}>
-              Manage your blood glucose data and {serviceName} integration
+              Manage your blood glucose data
             </Text>
 
             <View style={styles.buttonContainer}>
@@ -242,27 +199,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
                 <Text style={styles.buttonSubtext}>
                   Permanently remove all stored readings
                 </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, styles.syncButton]}
-                onPress={handleResyncHealthKit}
-                disabled={isResyncing}>
-                {isResyncing ? (
-                  <View style={styles.loadingContainer}>
-                    <ActivityIndicator color="#fff" />
-                    <Text style={styles.loadingText}>Importing data...</Text>
-                  </View>
-                ) : (
-                  <>
-                    <Text style={styles.buttonText}>
-                      Import {serviceName} Data
-                    </Text>
-                    <Text style={styles.buttonSubtext}>
-                      Sync data from the last 3 months
-                    </Text>
-                  </>
-                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -312,33 +248,29 @@ const styles = StyleSheet.create({
   toggleButtonTextActive: {
     color: '#fff',
   },
-  rangeInputs: {
+  rangeOptions: {
     marginTop: 10,
   },
-  rangeInput: {
-    marginBottom: 15,
-  },
-  rangeLabel: {
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    padding: 10,
-    fontSize: 16,
-  },
-  saveButton: {
-    backgroundColor: '#007AFF',
+  rangeOption: {
     padding: 15,
-    borderRadius: 5,
-    alignItems: 'center',
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
-  saveButtonText: {
-    color: '#fff',
+  rangeOptionSelected: {
+    backgroundColor: '#e3f2fd',
+    borderColor: '#007AFF',
+  },
+  rangeOptionLabel: {
     fontSize: 16,
     fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  rangeOptionValues: {
+    fontSize: 14,
+    color: '#666',
   },
   sectionDescription: {
     fontSize: 14,
@@ -364,9 +296,6 @@ const styles = StyleSheet.create({
   deleteButton: {
     backgroundColor: '#FF3B30',
   },
-  syncButton: {
-    backgroundColor: '#007AFF',
-  },
   buttonText: {
     color: '#fff',
     fontSize: 16,
@@ -377,14 +306,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.8,
     marginTop: 4,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  loadingText: {
-    color: '#fff',
-    fontSize: 14,
   },
 });

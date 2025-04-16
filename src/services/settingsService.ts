@@ -21,6 +21,7 @@ export class SettingsService {
   private static instance: SettingsService;
   private ranges: BloodGlucoseRanges = DEFAULT_RANGES;
   private healthKitEnabled: boolean = false;
+  private subscribers: ((ranges: BloodGlucoseRanges) => void)[] = [];
 
   private constructor() {
     this.loadSettings();
@@ -52,15 +53,11 @@ export class SettingsService {
   }
 
   async getRanges(): Promise<BloodGlucoseRanges> {
-    const ranges = await AsyncStorage.getItem('bloodGlucoseRanges');
-    if (ranges) {
-      return JSON.parse(ranges);
+    const storedRanges = await AsyncStorage.getItem(STORAGE_KEY);
+    if (storedRanges) {
+      return JSON.parse(storedRanges);
     }
-    return {
-      low: 70,
-      high: 180,
-      useCustomRanges: false,
-    };
+    return DEFAULT_RANGES;
   }
 
   async updateRanges(newRanges: Partial<BloodGlucoseRanges>): Promise<void> {
@@ -75,8 +72,13 @@ export class SettingsService {
     }
   }
 
-  async setRanges(ranges: BloodGlucoseRanges): Promise<void> {
-    await AsyncStorage.setItem('bloodGlucoseRanges', JSON.stringify(ranges));
+  async setRanges(newRanges: BloodGlucoseRanges): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newRanges));
+    } catch (error) {
+      console.error('Error saving ranges:', error);
+      throw error;
+    }
   }
 
   async getHealthKitEnabled(): Promise<boolean> {
@@ -115,5 +117,24 @@ export class SettingsService {
   async getGoogleFitEnabled(): Promise<boolean> {
     const enabled = await AsyncStorage.getItem('googleFitEnabled');
     return enabled === 'true';
+  }
+
+  subscribeToRanges(callback: (ranges: BloodGlucoseRanges) => void): {
+    remove: () => void;
+  } {
+    const subscription = {
+      remove: () => {
+        // Remove the subscription if needed
+      },
+    };
+
+    // Add the callback to a list of subscribers
+    this.subscribers.push(callback);
+
+    return subscription;
+  }
+
+  private notifySubscribers(ranges: BloodGlucoseRanges) {
+    this.subscribers.forEach(callback => callback(ranges));
   }
 }
