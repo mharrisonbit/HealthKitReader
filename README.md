@@ -198,6 +198,20 @@ npx react-native run-android --variant=release
 - Improved error message display
 - Better visual feedback for user actions
 
+### Chart Improvements
+
+- Centered chart with equal spacing on both sides
+- Empty chart state now fills the width of the screen
+- Transparent background for empty chart state
+- Consistent sizing between chart with data and empty state
+- Improved chart loading indicator positioning
+
+### Layout Enhancements
+
+- Improved centering of chart and content
+- Better spacing and alignment of UI elements
+- Responsive design adjustments for different screen sizes
+
 ## Prerequisites
 
 - Node.js (v18 or higher)
