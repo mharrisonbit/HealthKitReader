@@ -1,6 +1,6 @@
 # RN HealthKit - Blood Glucose Tracker
 
-A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with device health platforms (Apple HealthKit for iOS and Google Fit for Android).
+A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with Apple HealthKit for iOS.
 
 ## Detailed Application Overview
 
@@ -25,12 +25,6 @@ A comprehensive React Native application for tracking and managing blood glucose
     - Automatic background synchronization
     - Permission management for health data access
 
-  - **Android Integration**
-    - Google Fit integration
-    - Import and export blood glucose data
-    - Maintain data synchronization
-    - Handle Android-specific permissions
-
 #### 2. Data Visualization
 
 - **List View**
@@ -47,13 +41,13 @@ A comprehensive React Native application for tracking and managing blood glucose
 
 - **Chart View**
   - Interactive line chart for trend analysis
-  - Default 7-day view with customization options
+  - Multiple time period views (24 hours, 7 days, 30 days)
   - Visual elements:
     - Individual reading points
     - High/low range indicators
     - Trend lines
   - Time range selection
-  - Zoom and pan capabilities
+  - Real-time average calculation
 
 #### 3. Customization Features
 
@@ -64,7 +58,6 @@ A comprehensive React Native application for tracking and managing blood glucose
     - High range (> 180 mg/dL default)
   - User-adjustable ranges in settings
   - Visual feedback based on ranges
-  - Alert thresholds configuration
 
 #### 4. Data Storage and Management
 
@@ -77,12 +70,11 @@ A comprehensive React Native application for tracking and managing blood glucose
   - Automatic backup handling
 
 - **Data Synchronization**
-  - Two-way sync with health platforms
+  - Two-way sync with HealthKit
   - Automatic import of new readings
   - Manual import option
   - Duplicate prevention
   - Conflict resolution
-  - Background sync capability
 
 #### 5. User Interface
 
@@ -93,21 +85,14 @@ A comprehensive React Native application for tracking and managing blood glucose
   - Visual status indicators
   - Navigation to key features
   - Recent activity summary
-  - **Landscape Mode Features**
-    - 24-hour chart view with day-by-day navigation
-    - Interactive date selection for viewing historical data
-    - Automatic loading indicators during data fetch
-    - Navigation controls to move between days with data
-    - Disabled navigation when no more data is available
-    - Optimized chart display for landscape orientation
-    - Hidden import button in landscape mode for better space utilization
+  - Time period selection
+  - Data import functionality
 
 - **Settings Screen**
   - Range customization
-  - Health platform permissions
+  - HealthKit permissions
   - App preferences
   - Data management options
-  - User preferences
 
 ### Development and Release Mode Configuration
 
@@ -154,22 +139,15 @@ npx react-native run-android --variant=release
 - **Platform-Specific Features**
 
   - iOS:
-
     - HealthKit integration
     - Native iOS UI components
     - iOS-specific permissions
     - Background processing
 
-  - Android:
-    - Google Fit integration
-    - Material Design components
-    - Android-specific permissions
-    - Background services
-
 #### 7. Data Privacy and Security
 
 - Local storage of sensitive health data
-- Secure handling of health platform permissions
+- Secure handling of HealthKit permissions
 - User-controlled data sharing
 - No external server communication
 - Data encryption at rest
@@ -178,7 +156,7 @@ npx react-native run-android --variant=release
 
 - Graceful handling of:
   - Network connectivity issues
-  - Health platform permission denials
+  - HealthKit permission denials
   - Data synchronization conflicts
   - Storage errors
 - Automatic retry mechanisms
@@ -188,9 +166,7 @@ npx react-native run-android --variant=release
 ## Features
 
 - **Manual Entry**: Add blood glucose readings with custom notes
-- **Health Data Integration**:
-  - iOS: Sync with Apple HealthKit
-  - Android: Sync with Google Fit
+- **Health Data Integration**: Sync with Apple HealthKit
 - **Data Visualization**:
   - List view of all readings
   - Chart view showing trends over time
@@ -339,16 +315,6 @@ The app requires the following HealthKit permissions:
 - Weight (read)
 
 These permissions are requested when the app first launches. Users can manage these permissions in their device's Health app settings.
-
-### Android Permissions
-
-The app requires the following Google Fit permissions:
-
-- Fitness Activity Read
-- Fitness Body Read
-- Fitness Blood Glucose Read
-
-These permissions are requested when the app first launches. Users can manage these permissions in their device's Google Fit settings.
 
 ## Project Structure
 
