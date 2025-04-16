@@ -198,6 +198,30 @@ npx react-native run-android --variant=release
 - **Local Storage**: All data is stored locally using SQLite
 - **Development Tools**: Integrated with Reactotron for debugging
 
+## Recent Updates
+
+### Enhanced Chart Functionality
+
+- Independent chart data fetching for each time period
+- Improved data accuracy with fresh database queries
+- Optimized chart rendering for better performance
+- Added support for multiple time periods (24 hours, 7 days, 30 days)
+- Real-time average calculation for selected time period
+
+### Improved Data Management
+
+- Removed duplicate import functionality from settings screen
+- Streamlined data import process in home screen
+- Enhanced error handling for data operations
+- Optimized database queries for better performance
+
+### UI/UX Improvements
+
+- Redesigned time period selection interface
+- Enhanced chart navigation controls
+- Improved error message display
+- Better visual feedback for user actions
+
 ## Prerequisites
 
 - Node.js (v18 or higher)
@@ -389,3 +413,202 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Support
 
 For support, please open an issue in the GitHub repository or contact the maintainers.
+
+## Testing
+
+### Test Suite Overview
+
+The application includes a comprehensive test suite covering:
+
+1. **Component Tests**
+
+   - HomeScreen
+   - SettingsScreen
+   - ReminderScreen
+   - AddReadingScreen
+   - EditReadingScreen
+   - App component
+
+2. **Service Tests**
+
+   - DatabaseService
+   - HealthService
+   - SettingsService
+   - A1CService
+   - ChartService
+   - NotificationService
+
+3. **Utility Tests**
+
+   - Date/time formatting
+   - A1C calculations
+   - Range classification
+   - Time frame calculations
+
+4. **Type Tests**
+
+   - BloodGlucose
+   - BloodGlucoseRanges
+   - TimeFrame
+   - ChartData
+   - NotificationChannel
+
+5. **Theme Tests**
+   - Color validation
+   - Typography
+   - Spacing
+   - Shadows
+   - Border radius
+
+### Running Tests
+
+1. **Install Testing Dependencies**
+
+   ```bash
+   npm install --save-dev @testing-library/react-native @testing-library/jest-native
+   ```
+
+2. **Run All Tests**
+
+   ```bash
+   npm test
+   ```
+
+3. **Run Specific Test Files**
+
+   ```bash
+   # Run component tests
+   npm test -- HomeScreen.test.tsx
+
+   # Run service tests
+   npm test -- database.test.ts
+
+   # Run utility tests
+   npm test -- utils.test.ts
+   ```
+
+4. **Run Tests with Coverage**
+
+   ```bash
+   npm test -- --coverage
+   ```
+
+### Test Structure
+
+Each test file follows a consistent structure:
+
+```typescript
+describe('Component/Service Name', () => {
+  beforeEach(() => {
+    // Setup and mock initialization
+  });
+
+  it('should handle specific functionality', () => {
+    // Test implementation
+  });
+
+  it('should handle edge cases', () => {
+    // Edge case testing
+  });
+
+  it('should handle errors gracefully', () => {
+    // Error handling testing
+  });
+});
+```
+
+### Testing Best Practices
+
+1. **Component Testing**
+
+   - Test rendering of all UI elements
+   - Verify user interactions
+   - Check state changes
+   - Validate error handling
+   - Test navigation
+
+2. **Service Testing**
+
+   - Mock external dependencies
+   - Test all public methods
+   - Verify error handling
+   - Check data transformations
+   - Validate singleton patterns
+
+3. **Utility Testing**
+
+   - Test all exported functions
+   - Verify edge cases
+   - Check type safety
+   - Validate calculations
+
+4. **Type Testing**
+   - Verify required properties
+   - Check optional properties
+   - Validate type constraints
+   - Test type compatibility
+
+### Continuous Integration
+
+The test suite is integrated with the CI pipeline:
+
+1. **Pre-commit Hooks**
+
+   - Run linting
+   - Execute quick tests
+   - Check type definitions
+
+2. **Pull Request Checks**
+
+   - Run full test suite
+   - Generate coverage report
+   - Verify type safety
+   - Check for breaking changes
+
+3. **Release Process**
+   - Full test suite execution
+   - Coverage threshold verification
+   - Performance benchmarks
+   - Type checking
+
+### Debugging Tests
+
+1. **Using Jest Debugger**
+
+   ```bash
+   npm test -- --debug
+   ```
+
+2. **Debugging Specific Tests**
+
+   ```bash
+   npm test -- --testNamePattern="specific test name"
+   ```
+
+3. **Viewing Coverage Report**
+
+   ```bash
+   npm test -- --coverage --watchAll=false
+   ```
+
+### Test Maintenance
+
+1. **Adding New Tests**
+
+   - Follow existing patterns
+   - Include edge cases
+   - Test error scenarios
+   - Maintain coverage
+
+2. **Updating Tests**
+
+   - Update when features change
+   - Maintain test isolation
+   - Keep mocks current
+   - Update type definitions
+
+3. **Test Documentation**
+   - Document test purpose
+   - Explain complex scenarios
+   - Note edge cases
+   - Document mock setup
