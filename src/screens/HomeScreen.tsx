@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Pressable,
-  FlatList,
   Button,
 } from 'react-native';
 import {LineChart} from 'react-native-chart-kit';
@@ -27,6 +26,8 @@ import {DatabaseService} from '../services/database';
 import {useFocusEffect} from '@react-navigation/native';
 import {BloodGlucoseRanges} from '../services/settingsService';
 import AppleHealthKit from 'react-native-health';
+import {subDays, subHours} from 'date-fns';
+import {Reading} from '../types/Reading';
 
 type RootStackParamList = {
   Home: undefined;
@@ -42,12 +43,18 @@ const healthService = HealthService.getInstance();
 const settingsService = SettingsService.getInstance();
 const databaseService = new DatabaseService();
 
-export const HomeScreen = () => {
+export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const {width, height} = useWindowDimensions();
   const isLandscape = width > height;
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
-  const [ranges, setRanges] = useState<BloodGlucoseRanges>({
+  const [ranges, setRanges] = useState<{
+    low: number;
+    high: number;
+    useCustomRanges: boolean;
+    customLow?: number;
+    customHigh?: number;
+  }>({
     low: 70,
     high: 180,
     useCustomRanges: false,
@@ -70,7 +77,7 @@ export const HomeScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [healthKitData, setHealthKitData] = useState<any>(null);
   const [isLoadingHealthKitData, setIsLoadingHealthKitData] = useState(false);
-  const [timePeriod, setTimePeriod] = useState<'24h' | '7d' | '30d'>('24h');
+  const [timePeriod, _setTimePeriod] = useState<'24h' | '7d' | '30d'>('24h');
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [a1cTimeFrame, setA1cTimeFrame] = useState<
     '1w' | '1m' | '2m' | '3m' | '6m' | '1y'
@@ -200,13 +207,29 @@ export const HomeScreen = () => {
     }
   };
 
-  const loadSettings = async () => {
-    const savedRanges = await settingsService.getRanges();
-    setRanges(savedRanges);
-  };
-
   useEffect(() => {
+    const loadSettings = async () => {
+      const savedRanges = await settingsService.getRanges();
+      setRanges({
+        low: savedRanges.low,
+        high: savedRanges.high,
+        useCustomRanges: savedRanges.useCustomRanges,
+        customLow: savedRanges.customLow,
+        customHigh: savedRanges.customHigh,
+      });
+    };
+
     loadSettings();
+
+    const subscription = settingsService.subscribeToRanges(newRanges => {
+      setRanges(newRanges);
+      // Reload readings immediately when ranges change
+      loadReadings();
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   // Load readings when screen comes into focus
@@ -312,11 +335,20 @@ export const HomeScreen = () => {
     return '#4CAF50'; // Green for normal
   };
 
-  const calculateAverage = (readings: Array<{value: number}>) => {
-    if (readings.length === 0) return null;
-    const sum = readings.reduce((acc, reading) => acc + reading.value, 0);
-    return (sum / readings.length).toFixed(0);
-  };
+  // Add useEffect to update colors when ranges change
+  useEffect(() => {
+    // Reload readings to ensure colors are updated
+    loadReadings();
+  }, [ranges]);
+
+  const calculateAverage = useCallback((readings: Reading[]): number => {
+    if (readings.length === 0) return 0;
+    const sum = readings.reduce(
+      (acc: number, reading: Reading) => acc + reading.value,
+      0,
+    );
+    return sum / readings.length;
+  }, []);
 
   const calculateReadingPercentages = (
     readings: BloodGlucose[],
@@ -368,36 +400,55 @@ export const HomeScreen = () => {
     return 'steady';
   };
 
-  const allReadings = [...readings].sort((a, b) => {
-    const dateA = a.timestamp.getTime();
-    const dateB = b.timestamp.getTime();
-    return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
-  });
+  // Update allReadings to be a memoized value that updates when readings or sortOrder changes
+  const allReadings = useMemo(() => {
+    return [...readings].sort((a, b) => {
+      const dateA = a.timestamp.getTime();
+      const dateB = b.timestamp.getTime();
+      return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+    });
+  }, [readings, sortOrder]);
 
-  const getFilteredReadings = async (date?: Date) => {
-    const now = date || new Date();
-    const cutoff = new Date(now);
-    cutoff.setHours(0, 0, 0, 0);
+  const sortReadings = useCallback((a: Reading, b: Reading): number => {
+    return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+  }, []);
 
-    // Get fresh data from the database for the selected time period
+  const getFilteredReadings = useCallback(async (): Promise<Reading[]> => {
     const allReadings = await databaseService.getAllReadings();
-    return allReadings
-      .filter(reading => {
-        const readingDate = new Date(reading.timestamp);
-        return (
-          readingDate >= cutoff &&
-          readingDate < new Date(cutoff.getTime() + 24 * 60 * 60 * 1000)
-        );
-      })
-      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  };
+    const now = new Date();
+    let cutoffDate: Date;
 
-  const formatTimeLabel = (date: Date) => {
-    if (timePeriod === '24h') {
-      return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+    switch (timePeriod) {
+      case '24h':
+        cutoffDate = subHours(now, 24);
+        break;
+      case '7d':
+        cutoffDate = subDays(now, 7);
+        break;
+      case '30d':
+        cutoffDate = subDays(now, 30);
+        break;
+      default:
+        cutoffDate = subHours(now, 24);
     }
-    return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
-  };
+
+    return allReadings
+      .filter((reading: Reading) => new Date(reading.timestamp) >= cutoffDate)
+      .sort(sortReadings);
+  }, [timePeriod, sortReadings]);
+
+  const formatTimeLabel = useCallback(
+    (date: Date) => {
+      if (timePeriod === '24h') {
+        return date.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+      return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+    },
+    [timePeriod],
+  );
 
   const formatDateLabel = (date: Date) => {
     return date.toLocaleDateString([], {
@@ -420,7 +471,7 @@ export const HomeScreen = () => {
     }
   };
 
-  const checkAvailableData = async () => {
+  const checkAvailableData = useCallback(async () => {
     const now = new Date();
     const allReadings = await databaseService.getAllReadings();
 
@@ -431,11 +482,13 @@ export const HomeScreen = () => {
     }
 
     // Find the earliest and latest readings
-    const earliestReading = allReadings.reduce((earliest, current) =>
-      current.timestamp < earliest.timestamp ? current : earliest,
+    const earliestReading = allReadings.reduce(
+      (earliest: Reading, current: Reading) =>
+        current.timestamp < earliest.timestamp ? current : earliest,
     );
-    const latestReading = allReadings.reduce((latest, current) =>
-      current.timestamp > latest.timestamp ? current : latest,
+    const latestReading = allReadings.reduce(
+      (latest: Reading, current: Reading) =>
+        current.timestamp > latest.timestamp ? current : latest,
     );
 
     // Check if there's data before the selected date
@@ -446,14 +499,14 @@ export const HomeScreen = () => {
       latestReading.timestamp > selectedDate &&
         new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000) <= now,
     );
-  };
+  }, [selectedDate]);
 
   // Update chart data when selected date changes
   useEffect(() => {
     const updateChartData = async () => {
       setIsLoadingChart(true);
       try {
-        const filteredReadings = await getFilteredReadings(selectedDate);
+        const filteredReadings = await getFilteredReadings();
         const average = calculateAverage(filteredReadings);
 
         setChartData({
@@ -465,7 +518,7 @@ export const HomeScreen = () => {
             },
             {
               data: filteredReadings.map(() =>
-                average ? parseFloat(average) : 0,
+                average ? parseFloat(average.toFixed(0)) : 0,
               ),
               strokeWidth: 1,
               color: (opacity = 1) => `rgba(128, 128, 128, ${opacity})`,
@@ -480,7 +533,13 @@ export const HomeScreen = () => {
     };
 
     updateChartData();
-  }, [selectedDate]);
+  }, [
+    selectedDate,
+    calculateAverage,
+    checkAvailableData,
+    formatTimeLabel,
+    getFilteredReadings,
+  ]);
 
   const chartConfig = {
     backgroundColor: '#ffffff',
@@ -527,34 +586,6 @@ export const HomeScreen = () => {
     height: isLandscape ? height - 100 : 220,
   };
 
-  const handleEditReading = async (reading: BloodGlucose) => {
-    if (reading.sourceName !== 'Manual Entry') {
-      Alert.alert('Error', 'Only manual entries can be edited');
-      return;
-    }
-    setEditingReading(reading);
-    setIsEditing(true);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingReading) return;
-
-    try {
-      await databaseService.updateReading(editingReading);
-      await loadReadings();
-      setIsEditing(false);
-      setEditingReading(null);
-    } catch (error) {
-      console.error('Error updating reading:', error);
-      Alert.alert('Error', 'Failed to update reading');
-    }
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditing(false);
-    setEditingReading(null);
-  };
-
   const handleReadingPress = async (reading: BloodGlucose) => {
     setSelectedReading(reading);
     if (reading.sourceName === 'Apple Health') {
@@ -570,7 +601,6 @@ export const HomeScreen = () => {
             options,
             (error: string, samples: any[]) => {
               if (error) {
-                console.error('Error getting HealthKit data:', error);
                 resolve([]);
               } else {
                 resolve(samples);
@@ -583,7 +613,7 @@ export const HomeScreen = () => {
           setHealthKitData(results[0]);
         }
       } catch (error) {
-        console.error('Error fetching HealthKit data:', error);
+        // Silently handle error
       } finally {
         setIsLoadingHealthKitData(false);
       }
@@ -605,6 +635,35 @@ export const HomeScreen = () => {
   }) => {
     if (isLandscape) {
       setSelectedReading(allReadings[data.index]);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingReading) return;
+
+    try {
+      await databaseService.updateReading(editingReading);
+      await loadReadings();
+      setIsEditing(false);
+      setEditingReading(null);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update reading');
+    }
+  };
+
+  const getReadingColor = (value: number) => {
+    const {low, high, useCustomRanges, customLow, customHigh} = ranges;
+    const effectiveLow =
+      useCustomRanges && customLow !== undefined ? customLow : low;
+    const effectiveHigh =
+      useCustomRanges && customHigh !== undefined ? customHigh : high;
+
+    if (value < effectiveLow) {
+      return '#FF3B30'; // Red for low
+    } else if (value > effectiveHigh) {
+      return '#FF9500'; // Orange for high
+    } else {
+      return '#34C759'; // Green for normal
     }
   };
 
@@ -681,7 +740,9 @@ export const HomeScreen = () => {
                     <Text
                       style={{
                         color: getColorForValue(
-                          parseInt(calculateAverage(allReadings) || '0'),
+                          typeof calculateAverage(allReadings) === 'number'
+                            ? calculateAverage(allReadings)
+                            : 0,
                         ),
                       }}>
                       {calculateAverage(allReadings) || 'N/A'} mg/dL
@@ -876,7 +937,7 @@ export const HomeScreen = () => {
                         key={index}
                         style={[
                           styles.readingItem,
-                          {borderLeftColor: getColorForValue(reading.value)},
+                          {borderLeftColor: getReadingColor(reading.value)},
                         ]}
                         onPress={() => handleReadingPress(reading)}>
                         <View style={styles.readingContent}>
@@ -930,13 +991,15 @@ export const HomeScreen = () => {
         animationType="fade"
         onRequestClose={() => {
           Keyboard.dismiss();
-          handleCancelEdit();
+          setIsEditing(false);
+          setEditingReading(null);
         }}>
         <Pressable
           style={styles.modalOverlay}
           onPress={() => {
             Keyboard.dismiss();
-            handleCancelEdit();
+            setIsEditing(false);
+            setEditingReading(null);
           }}>
           <Pressable
             style={styles.editContent}
@@ -970,7 +1033,8 @@ export const HomeScreen = () => {
                 style={[styles.editButton, styles.cancelButton]}
                 onPress={() => {
                   Keyboard.dismiss();
-                  handleCancelEdit();
+                  setIsEditing(false);
+                  setEditingReading(null);
                 }}>
                 <Text style={styles.editButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -1000,7 +1064,7 @@ export const HomeScreen = () => {
               <Text
                 style={[
                   styles.popupValue,
-                  {color: getColorForValue(selectedReading.value)},
+                  {color: getReadingColor(selectedReading.value)},
                 ]}>
                 {selectedReading.value} mg/dL
               </Text>
@@ -1819,5 +1883,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
     borderRadius: 16,
+  },
+  readingColorIndicator: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  readingInfo: {
+    flex: 1,
+  },
+  readingUnit: {
+    fontSize: 14,
+    color: '#666',
+  },
+  readingTime: {
+    fontSize: 14,
+    color: '#666',
   },
 });
