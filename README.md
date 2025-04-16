@@ -1,6 +1,6 @@
 # RN HealthKit - Blood Glucose Tracker
 
-A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with Apple HealthKit for iOS.
+A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with Apple HealthKit for iOS.(Although made to be for both apple and android it was not tested or has never been built to an android device at this time).
 
 ## Detailed Application Overview
 
