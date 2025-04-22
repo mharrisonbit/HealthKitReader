@@ -886,7 +886,7 @@ PODS:
   - React-Mapbuffer (0.73.2):
     - glog
     - React-debug
-  - react-native-safe-area-context (4.14.1):
+  - react-native-safe-area-context (4.9.0):
     - React-Core
   - react-native-sqlite-storage (6.0.1):
     - React-Core
@@ -1061,11 +1061,14 @@ PODS:
     - React
   - RNCAsyncStorage (1.24.0):
     - React-Core
-  - RNScreens (3.37.0):
+  - RNGestureHandler (2.14.0):
     - glog
     - RCT-Folly (= 2022.05.16.00)
     - React-Core
-    - React-RCTImage
+  - RNScreens (3.29.0):
+    - glog
+    - RCT-Folly (= 2022.05.16.00)
+    - React-Core
   - RNSVG (14.2.0):
     - React-Core
   - SocketRocket (0.6.1)
@@ -1126,6 +1129,7 @@ DEPENDENCIES:
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - RNAppleHealthKit (from `../node_modules/react-native-health`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
+  - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - RNScreens (from `../node_modules/react-native-screens`)
   - RNSVG (from `../node_modules/react-native-svg`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
@@ -1240,6 +1244,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-health"
   RNCAsyncStorage:
     :path: "../node_modules/@react-native-async-storage/async-storage"
+  RNGestureHandler:
+    :path: "../node_modules/react-native-gesture-handler"
   RNScreens:
     :path: "../node_modules/react-native-screens"
   RNSVG:
@@ -1277,7 +1283,7 @@ SPEC CHECKSUMS:
   React-jsinspector: 03644c063fc3621c9a4e8bf263a8150909129618
   React-logger: b42a493ae72922d8d6a497038359240ffd457119
   React-Mapbuffer: 2cd1af67c3754dfb934948448125f0e051586db7
-  react-native-safe-area-context: 758e894ca5a9bd1868d2a9cfbca7326a2b6bf9dc
+  react-native-safe-area-context: 435f4c13ac75ceed6135382ee77d57d1a5b5b2d6
   react-native-sqlite-storage: 0c84826214baaa498796c7e46a5ccc9a82e114ed
   React-nativeconfig: d753fbbc8cecc8ae413d615599ac378bbf6999bb
   React-NativeModulesApple: 4cc974c51ebc4911173bbe5d5897ad55ebc8b90f
@@ -1301,7 +1307,8 @@ SPEC CHECKSUMS:
   ReactCommon: 35e3b6a1c75d462acb0155e38e627b98d5bf586b
   RNAppleHealthKit: 86ef7ab70f762b802f5c5289372de360cca701f9
   RNCAsyncStorage: b6410dead2732b5c72a7fdb1ecb5651bbcf4674b
-  RNScreens: b12996ef8ef492d56d126400e8aef6e613c13ef6
+  RNGestureHandler: 7c72d2c6f7e1cfd960527a226d85d2f26d1be8cd
+  RNScreens: 8d1521c6e375a79dbd4525efaf21704cc64ac0cf
   RNSVG: 043f603fc70d48d289bc3f2ceedbb05ce2636f5c
   SocketRocket: f32cd54efbe0f095c4d7594881e52619cfe80b17
   Yoga: 13c8ef87792450193e117976337b8527b49e8c03

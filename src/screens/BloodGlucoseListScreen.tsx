@@ -12,7 +12,7 @@ import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {HealthService} from '../services/healthService';
-import AppleHealthKit from 'react-native-health';
+import {format} from 'date-fns';
 
 type RootStackParamList = {
   List: {
@@ -194,6 +194,21 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
     }
   };
 
+  const getUniqueDays = (readings: BloodGlucose[]) => {
+    const uniqueDates = new Set(
+      readings.map(reading =>
+        format(new Date(reading.timestamp), 'yyyy-MM-dd'),
+      ),
+    );
+    return uniqueDates.size;
+  };
+
+  const getAverageReadingsPerDay = (readings: BloodGlucose[]) => {
+    const uniqueDays = getUniqueDays(readings);
+    if (uniqueDays === 0) return 0;
+    return (readings.length / uniqueDays).toFixed(1);
+  };
+
   const renderItem = ({item}: {item: BloodGlucose}) => (
     <View style={styles.readingItem}>
       <View style={styles.readingInfo}>
@@ -201,7 +216,7 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
           {item.value} {item.unit}
         </Text>
         <Text style={styles.readingDate}>
-          {new Date(item.timestamp).toLocaleString()}
+          {format(new Date(item.timestamp), 'MMM d, yyyy h:mm a')}
         </Text>
       </View>
       <TouchableOpacity
@@ -234,26 +249,34 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate('Add')}>
-          <Text style={styles.addButtonText}>Add Reading</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.chartButton}
-          onPress={() => navigation.navigate('Charts')}>
-          <Text style={styles.chartButtonText}>View Charts</Text>
-        </TouchableOpacity>
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Days</Text>
+          <Text style={styles.statValue}>{getUniqueDays(readings)}</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Readings</Text>
+          <Text style={styles.statValue}>{readings.length}</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statLabel}>Avg/Day</Text>
+          <Text style={styles.statValue}>
+            {getAverageReadingsPerDay(readings)}
+          </Text>
+        </View>
       </View>
+
       <TouchableOpacity
         style={styles.importButton}
         onPress={handleImportFromHealth}
         disabled={isImporting}>
-        <Text style={styles.importButtonText}>
-          {isImporting ? 'Importing...' : 'Import from Health'}
-        </Text>
+        {isImporting ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.importButtonText}>Import from Health</Text>
+        )}
       </TouchableOpacity>
+
       <FlatList
         data={readings}
         renderItem={renderItem}
@@ -277,36 +300,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#fff',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  addButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  chartButton: {
-    backgroundColor: '#34C759',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  chartButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   importButton: {
     backgroundColor: '#5856D6',
@@ -391,5 +384,27 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginTop: 20,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 16,
+    backgroundColor: '#f8f8f8',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  statItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#007AFF',
   },
 });

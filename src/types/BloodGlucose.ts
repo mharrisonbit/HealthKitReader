@@ -5,4 +5,5 @@ export interface BloodGlucose {
   timestamp: Date;
   sourceName: string;
   notes?: string;
+  healthKitId?: string;
 }

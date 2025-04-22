@@ -8,6 +8,7 @@
 import './src/config/ReactotronConfig';
 import React, {useState} from 'react';
 import {NavigationContainer} from '@react-navigation/native';
+import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {HomeScreen} from './src/screens/HomeScreen';
 import {SettingsScreen} from './src/screens/SettingsScreen';
@@ -15,12 +16,13 @@ import {AddBloodGlucoseScreen} from './src/screens/AddBloodGlucoseScreen';
 import {BloodGlucoseListScreen} from './src/screens/BloodGlucoseListScreen';
 import {BloodGlucoseChartScreen} from './src/screens/BloodGlucoseChartScreen';
 import {BloodGlucose} from './src/types/BloodGlucose';
-import {View, Text} from 'react-native';
+import {Text} from 'react-native';
 import {DatabaseService} from './src/services/database';
 import {
   LoadingScreen,
   ErrorScreen,
 } from './src/components/LoadingAndErrorScreens';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -34,8 +36,60 @@ export type RootStackParamList = {
   Charts: undefined;
 };
 
+const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const databaseService = new DatabaseService();
+
+// Create stack navigators for each tab
+const HomeStack = () => (
+  <Stack.Navigator>
+    <Stack.Screen
+      name="Home"
+      component={HomeScreen}
+      options={{title: 'Blood Glucose Tracker'}}
+    />
+    <Stack.Screen
+      name="Add"
+      component={AddBloodGlucoseScreen}
+      options={{title: 'Add Reading'}}
+    />
+  </Stack.Navigator>
+);
+
+const ListStack = () => (
+  <Stack.Navigator>
+    <Stack.Screen
+      name="List"
+      component={BloodGlucoseListScreen}
+      options={{title: 'Blood Glucose Readings'}}
+    />
+    <Stack.Screen
+      name="Add"
+      component={AddBloodGlucoseScreen}
+      options={{title: 'Add Reading'}}
+    />
+  </Stack.Navigator>
+);
+
+const ChartsStack = () => (
+  <Stack.Navigator>
+    <Stack.Screen
+      name="Charts"
+      component={BloodGlucoseChartScreen}
+      options={{title: 'Charts'}}
+    />
+  </Stack.Navigator>
+);
+
+const SettingsStack = () => (
+  <Stack.Navigator>
+    <Stack.Screen
+      name="Settings"
+      component={SettingsScreen}
+      options={{title: 'Settings'}}
+    />
+  </Stack.Navigator>
+);
 
 function App(): React.JSX.Element {
   const [isLoading, setIsLoading] = useState(true);
@@ -71,83 +125,70 @@ function App(): React.JSX.Element {
     initDatabase();
   }, []);
 
-  const handleAddReading = async (data: Omit<BloodGlucose, 'id'>) => {
-    try {
-      const newReading: BloodGlucose = {
-        ...data,
-        id: Date.now().toString(),
-      };
-      await databaseService.addReading(newReading);
-    } catch (error) {
-      if (__DEV__) {
-        console.error('Error adding reading:', error);
-      }
-    }
-  };
-
-  const handleDeleteReading = async (id: string) => {
-    try {
-      await databaseService.deleteReading(id);
-    } catch (error) {
-      if (__DEV__) {
-        console.error('Error deleting reading:', error);
-      }
-    }
-  };
-
   if (isLoading) {
-    // console.log('Rendering loading screen');
     return <LoadingScreen />;
   }
 
   if (error) {
-    // console.log('Rendering error screen:', error);
     return <ErrorScreen error={error} />;
   }
 
-  // console.log('Rendering main app');
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Home">
-        <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{
-            title: 'Blood Glucose Tracker',
-          }}
-        />
-        <Stack.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{
-            title: 'Settings',
-          }}
-        />
-        <Stack.Screen
-          name="List"
-          component={BloodGlucoseListScreen}
-          options={{
-            title: 'Blood Glucose Readings',
-          }}
-          initialParams={{onDelete: handleDeleteReading}}
-        />
-        <Stack.Screen
-          name="Add"
-          component={AddBloodGlucoseScreen}
-          options={{
-            title: 'Add Reading',
-          }}
-          initialParams={{onSave: handleAddReading}}
-        />
-        <Stack.Screen
-          name="Charts"
-          component={BloodGlucoseChartScreen}
-          options={{
-            title: 'Charts',
-          }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Tab.Navigator
+          screenOptions={{
+            headerShown: false,
+            tabBarActiveTintColor: '#007AFF',
+            tabBarInactiveTintColor: '#8E8E93',
+            tabBarStyle: {
+              backgroundColor: '#fff',
+              borderTopColor: '#E5E5EA',
+            },
+          }}>
+          <Tab.Screen
+            name="HomeTab"
+            component={HomeStack}
+            options={{
+              title: 'Home',
+              tabBarIcon: ({color}: {color: string}) => (
+                <Text style={{color, fontSize: 24}}>🏠</Text>
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="ListTab"
+            component={ListStack}
+            options={{
+              title: 'Readings',
+              tabBarIcon: ({color}: {color: string}) => (
+                <Text style={{color, fontSize: 24}}>📋</Text>
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="ChartsTab"
+            component={ChartsStack}
+            options={{
+              title: 'Charts',
+              tabBarIcon: ({color}: {color: string}) => (
+                <Text style={{color, fontSize: 24}}>📊</Text>
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="SettingsTab"
+            component={SettingsStack}
+            options={{
+              title: 'Settings',
+              tabBarIcon: ({color}: {color: string}) => (
+                <Text style={{color, fontSize: 24}}>⚙️</Text>
+              ),
+            }}
+          />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 

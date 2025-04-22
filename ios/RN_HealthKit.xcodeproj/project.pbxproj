@@ -8,8 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		476F132ADC832D4F8272665F /* libPods-RN_HealthKit.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FBB39CE6AF5C61C5AADE4350 /* libPods-RN_HealthKit.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		7BFAC683CD005AA0D384A7B3 /* libPods-RN_HealthKit.a in Frameworks */ = {isa = PBXBuildFile; fileRef = DB947C43FA106DDF099D80C5 /* libPods-RN_HealthKit.a */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		FE95E5298BC2F24E5D92CF24 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
@@ -19,13 +19,13 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = RN_HealthKit/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = RN_HealthKit/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = RN_HealthKit/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		170E9857E34835A1654BF203 /* Pods-RN_HealthKit.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RN_HealthKit.release.xcconfig"; path = "Target Support Files/Pods-RN_HealthKit/Pods-RN_HealthKit.release.xcconfig"; sourceTree = "<group>"; };
+		49F919859B662AF6217ABFE3 /* Pods-RN_HealthKit.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RN_HealthKit.release.xcconfig"; path = "Target Support Files/Pods-RN_HealthKit/Pods-RN_HealthKit.release.xcconfig"; sourceTree = "<group>"; };
 		6885A83D2D8F826600AD038A /* RN_HealthKit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; name = RN_HealthKit.entitlements; path = RN_HealthKit/RN_HealthKit.entitlements; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = RN_HealthKit/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = RN_HealthKit/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		CC5C5B76182F1D292761C49D /* Pods-RN_HealthKit.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RN_HealthKit.debug.xcconfig"; path = "Target Support Files/Pods-RN_HealthKit/Pods-RN_HealthKit.debug.xcconfig"; sourceTree = "<group>"; };
+		BF472C3281B2C0955B134D73 /* Pods-RN_HealthKit.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RN_HealthKit.debug.xcconfig"; path = "Target Support Files/Pods-RN_HealthKit/Pods-RN_HealthKit.debug.xcconfig"; sourceTree = "<group>"; };
+		DB947C43FA106DDF099D80C5 /* libPods-RN_HealthKit.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-RN_HealthKit.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		FBB39CE6AF5C61C5AADE4350 /* libPods-RN_HealthKit.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-RN_HealthKit.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -33,7 +33,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				476F132ADC832D4F8272665F /* libPods-RN_HealthKit.a in Frameworks */,
+				7BFAC683CD005AA0D384A7B3 /* libPods-RN_HealthKit.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -57,7 +57,7 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				FBB39CE6AF5C61C5AADE4350 /* libPods-RN_HealthKit.a */,
+				DB947C43FA106DDF099D80C5 /* libPods-RN_HealthKit.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -94,8 +94,8 @@
 		BBD78D7AC51CEA395F1C20DB /* Pods */ = {
 			isa = PBXGroup;
 			children = (
-				CC5C5B76182F1D292761C49D /* Pods-RN_HealthKit.debug.xcconfig */,
-				170E9857E34835A1654BF203 /* Pods-RN_HealthKit.release.xcconfig */,
+				BF472C3281B2C0955B134D73 /* Pods-RN_HealthKit.debug.xcconfig */,
+				49F919859B662AF6217ABFE3 /* Pods-RN_HealthKit.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -107,13 +107,13 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "RN_HealthKit" */;
 			buildPhases = (
-				974B5A8510155FB44945DBB3 /* [CP] Check Pods Manifest.lock */,
+				93BA1BE7D194F9ED279FBB4E /* [CP] Check Pods Manifest.lock */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
-				5E7A64A142CCCB6753728D03 /* [CP] Embed Pods Frameworks */,
-				E259621192F171BF9B8EC595 /* [CP] Copy Pods Resources */,
+				17C452607231DF2B2A3CEC1D /* [CP] Embed Pods Frameworks */,
+				BB310595B9FEDF404AE0BF81 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -185,7 +185,7 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"$REACT_NATIVE_PATH/scripts/xcode/with-environment.sh\"\nREACT_NATIVE_XCODE=\"$REACT_NATIVE_PATH/scripts/react-native-xcode.sh\"\n\n/bin/sh -c \"$WITH_ENVIRONMENT $REACT_NATIVE_XCODE\"\n";
 		};
-		5E7A64A142CCCB6753728D03 /* [CP] Embed Pods Frameworks */ = {
+		17C452607231DF2B2A3CEC1D /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -202,7 +202,7 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-RN_HealthKit/Pods-RN_HealthKit-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		974B5A8510155FB44945DBB3 /* [CP] Check Pods Manifest.lock */ = {
+		93BA1BE7D194F9ED279FBB4E /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -224,7 +224,7 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		E259621192F171BF9B8EC595 /* [CP] Copy Pods Resources */ = {
+		BB310595B9FEDF404AE0BF81 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -257,7 +257,7 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = CC5C5B76182F1D292761C49D /* Pods-RN_HealthKit.debug.xcconfig */;
+			baseConfigurationReference = BF472C3281B2C0955B134D73 /* Pods-RN_HealthKit.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
@@ -287,7 +287,7 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 170E9857E34835A1654BF203 /* Pods-RN_HealthKit.release.xcconfig */;
+			baseConfigurationReference = 49F919859B662AF6217ABFE3 /* Pods-RN_HealthKit.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

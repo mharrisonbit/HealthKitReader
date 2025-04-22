@@ -5,22 +5,27 @@ import {BloodGlucose} from '../types/BloodGlucose';
 SQLite.enablePromise(true);
 
 const database_name = 'BloodGlucose.db';
-const database_version = 2; // Increment version for schema change
+const database_version = 3; // Increment version for schema change
 
 export class DatabaseService {
   private db: SQLite.SQLiteDatabase | null = null;
   private isInitialized = false;
 
   async initDB() {
-    if (this.isInitialized) return this.db;
+    if (this.isInitialized) {
+      console.log('Database already initialized');
+      return this.db;
+    }
 
     try {
+      console.log('Initializing database...');
       this.db = await SQLite.openDatabase({
         name: database_name,
       });
       await this.migrateDatabase();
       await this.createTable();
       this.isInitialized = true;
+      console.log('Database initialized successfully');
       return this.db;
     } catch (error) {
       console.error('Error initializing database:', error);
@@ -80,7 +85,8 @@ export class DatabaseService {
         unit TEXT NOT NULL,
         timestamp TEXT NOT NULL,
         sourceName TEXT NOT NULL DEFAULT 'Manual Entry',
-        notes TEXT
+        notes TEXT,
+        healthKitId TEXT UNIQUE
       )
     `;
 
@@ -104,39 +110,40 @@ export class DatabaseService {
       throw new Error('Database not initialized');
     }
 
-    // Generate a unique ID using timestamp, random string, and source
-    const timestamp = reading.timestamp.getTime();
-    const randomString = Math.random().toString(36).substr(2, 9);
-    const sourcePrefix = reading.sourceName.toLowerCase().replace(/\s+/g, '-');
-    const id = `${sourcePrefix}-${timestamp}-${randomString}`;
+    const id = `${reading.timestamp.getTime()}_${Math.random()
+      .toString(36)
+      .substring(7)}_${reading.sourceName}`;
 
-    try {
-      await this.db.executeSql(
-        'INSERT INTO blood_glucose (id, value, unit, timestamp, sourceName, notes) VALUES (?, ?, ?, ?, ?, ?)',
+    const newReading: BloodGlucose = {
+      ...reading,
+      id,
+    };
+
+    await this.db.transaction(tx => {
+      tx.executeSql(
+        `INSERT OR REPLACE INTO blood_glucose 
+        (id, value, unit, timestamp, sourceName, notes, healthKitId) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           reading.value,
           reading.unit,
           reading.timestamp.toISOString(),
-          reading.sourceName || 'Manual Entry',
+          reading.sourceName,
           reading.notes || null,
+          reading.healthKitId || null,
         ],
       );
+    });
 
-      return {
-        ...reading,
-        id,
-        sourceName: reading.sourceName || 'Manual Entry',
-      };
-    } catch (error) {
-      console.error('Error adding reading:', error);
-      throw error;
-    }
+    return newReading;
   }
 
   async getAllReadings(): Promise<BloodGlucose[]> {
+    console.log('Getting all readings...');
     await this.ensureInitialized();
     if (!this.db) {
+      console.error('Database not initialized');
       throw new Error('Database not initialized');
     }
 
@@ -144,6 +151,7 @@ export class DatabaseService {
       const result = await this.db.executeSql(
         'SELECT * FROM blood_glucose ORDER BY timestamp DESC',
       );
+      console.log('Query executed successfully, processing results...');
 
       const readings: BloodGlucose[] = [];
       for (let i = 0; i < result[0].rows.length; i++) {
@@ -157,6 +165,7 @@ export class DatabaseService {
           notes: row.notes || undefined,
         });
       }
+      console.log(`Processed ${readings.length} readings`);
       return readings;
     } catch (error) {
       console.error('Error getting all readings:', error);
@@ -286,6 +295,58 @@ export class DatabaseService {
       await this.db.close();
       this.db = null;
       this.isInitialized = false;
+    }
+  }
+
+  async getReadingByHealthKitId(
+    healthKitId: string,
+  ): Promise<BloodGlucose | null> {
+    await this.ensureInitialized();
+
+    return new Promise((resolve, reject) => {
+      this.db?.transaction(tx => {
+        tx.executeSql(
+          'SELECT * FROM blood_glucose WHERE healthKitId = ?',
+          [healthKitId],
+          (_, results) => {
+            if (results.rows.length > 0) {
+              const row = results.rows.item(0);
+              resolve({
+                ...row,
+                timestamp: new Date(row.timestamp),
+              });
+            } else {
+              resolve(null);
+            }
+          },
+          (_, error) => {
+            reject(error);
+            return false;
+          },
+        );
+      });
+    });
+  }
+
+  async resetDatabase(): Promise<void> {
+    await this.ensureInitialized();
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      // Drop all tables
+      await this.db.executeSql('DROP TABLE IF EXISTS blood_glucose');
+      await this.db.executeSql('DROP TABLE IF EXISTS version');
+
+      // Reset initialization state
+      this.isInitialized = false;
+
+      // Reinitialize the database
+      await this.initDB();
+    } catch (error) {
+      console.error('Error resetting database:', error);
+      throw error;
     }
   }
 }
