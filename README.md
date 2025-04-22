@@ -1,6 +1,72 @@
 # RN HealthKit - Blood Glucose Tracker
 
-A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with Apple HealthKit for iOS.(Although made to be for both apple and android it was not tested or has never been built to an android device at this time).
+A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with Apple HealthKit for iOS. (Although made to be for both Apple and Android, it was not tested or has never been built to an Android device at this time).
+
+## Recent Updates
+
+### Added Features
+
+- **Enhanced Chart View**
+  - Time range selection for viewing readings (1 hour, 3 hours, 6 hours, 12 hours)
+  - Chronological display with oldest readings on the left and newest on the right
+  - Simplified time labels showing only start and end times
+  - Improved readability with cleaner x-axis
+
+### Modified Features
+
+- **Data Retrieval**
+  - Limited HealthKit data retrieval to the last year of readings
+  - Optimized database queries for better performance
+  - Removed development console logs for release mode compatibility
+
+### Removed Features
+
+- **Chart View**
+  - Removed bar chart visualization
+  - Removed intermediate time labels on x-axis
+  - Simplified the chart interface for better user experience
+
+## Release Notes
+
+### Version 1.1.0
+
+#### Breaking Changes
+
+- Removed support for viewing data beyond one year from HealthKit
+- Removed bar chart visualization from the chart view
+- Removed intermediate time labels on the x-axis
+
+#### New Features
+
+- Added time range selection with four options:
+  - 1 hour view
+  - 3 hours view
+  - 6 hours view
+  - 12 hours view
+- Implemented chronological display of readings (oldest to newest)
+- Added simplified time labels showing only start and end times
+- Improved chart readability with cleaner x-axis
+
+#### Performance Improvements
+
+- Optimized database queries for faster data retrieval
+- Removed development console logs for better release mode performance
+- Improved chart rendering performance
+- Enhanced data filtering for selected time ranges
+
+#### Bug Fixes
+
+- Fixed chronological ordering of readings in chart view
+- Corrected time label display to show only start and end times
+- Improved data consistency when switching between time ranges
+- Fixed chart scaling issues with different time ranges
+
+#### Technical Changes
+
+- Updated HealthKit data retrieval to enforce one-year limit
+- Removed development-only console logs
+- Optimized database queries for better performance
+- Improved error handling in data retrieval
 
 ## Detailed Application Overview
 
@@ -20,7 +86,7 @@ A comprehensive React Native application for tracking and managing blood glucose
   - **iOS Integration**
 
     - Seamless connection with Apple HealthKit
-    - Import existing blood glucose readings
+    - Import existing blood glucose readings (limited to last year)
     - Write new readings back to HealthKit
     - Automatic background synchronization
     - Permission management for health data access
@@ -41,13 +107,14 @@ A comprehensive React Native application for tracking and managing blood glucose
 
 - **Chart View**
   - Interactive line chart for trend analysis
-  - Multiple time period views (24 hours, 7 days, 30 days)
+  - Time range selection (1h, 3h, 6h, 12h)
+  - Chronological display (oldest to newest)
+  - Simplified time labels (start and end times only)
+  - Real-time average calculation
   - Visual elements:
     - Individual reading points
     - High/low range indicators
     - Trend lines
-  - Time range selection
-  - Real-time average calculation
 
 #### 3. Customization Features
 
@@ -173,44 +240,6 @@ npx react-native run-android --variant=release
 - **Customizable Ranges**: Set custom low and high blood glucose ranges
 - **Local Storage**: All data is stored locally using SQLite
 - **Development Tools**: Integrated with Reactotron for debugging
-
-## Recent Updates
-
-### Enhanced Chart Functionality
-
-- Independent chart data fetching for each time period
-- Improved data accuracy with fresh database queries
-- Optimized chart rendering for better performance
-- Added support for multiple time periods (24 hours, 7 days, 30 days)
-- Real-time average calculation for selected time period
-
-### Improved Data Management
-
-- Removed duplicate import functionality from settings screen
-- Streamlined data import process in home screen
-- Enhanced error handling for data operations
-- Optimized database queries for better performance
-
-### UI/UX Improvements
-
-- Redesigned time period selection interface
-- Enhanced chart navigation controls
-- Improved error message display
-- Better visual feedback for user actions
-
-### Chart Improvements
-
-- Centered chart with equal spacing on both sides
-- Empty chart state now fills the width of the screen
-- Transparent background for empty chart state
-- Consistent sizing between chart with data and empty state
-- Improved chart loading indicator positioning
-
-### Layout Enhancements
-
-- Improved centering of chart and content
-- Better spacing and alignment of UI elements
-- Responsive design adjustments for different screen sizes
 
 ## Prerequisites
 

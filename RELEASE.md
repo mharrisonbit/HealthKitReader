@@ -1,44 +1,54 @@
 # Release Notes
 
-## Version 1.0.0 (Current)
+## Version 1.1.0
+
+### Breaking Changes
+
+- Removed support for viewing data beyond one year from HealthKit
+- Removed bar chart visualization from the chart view
+- Removed intermediate time labels on the x-axis
 
 ### New Features
 
-- Initial release of RN HealthKit Blood Glucose Tracker
-- Blood glucose reading tracking and management
-- Apple HealthKit integration
-- Data visualization with charts
-- Customizable glucose ranges
-- Local data storage with SQLite
-- A1C calculation
-- Reading statistics and trends
+- Added time range selection with four options:
+  - 1 hour view
+  - 3 hours view
+  - 6 hours view
+  - 12 hours view
+- Implemented chronological display of readings (oldest to newest)
+- Added simplified time labels showing only start and end times
+- Improved chart readability with cleaner x-axis
 
-### Chart Improvements
+### Performance Improvements
 
-- Centered chart with equal spacing on both sides
-- Empty chart state now fills the width of the screen
-- Transparent background for empty chart state
-- Consistent sizing between chart with data and empty state
-- Improved chart loading indicator positioning
-
-### Layout Enhancements
-
-- Improved centering of chart and content
-- Better spacing and alignment of UI elements
-- Responsive design adjustments for different screen sizes
+- Optimized database queries for faster data retrieval
+- Removed development console logs for better release mode performance
+- Improved chart rendering performance
+- Enhanced data filtering for selected time ranges
 
 ### Bug Fixes
 
-- Fixed chart sizing issues
-- Improved empty state handling
-- Enhanced loading indicator positioning
-- Fixed layout centering issues
+- Fixed chronological ordering of readings in chart view
+- Corrected time label display to show only start and end times
+- Improved data consistency when switching between time ranges
+- Fixed chart scaling issues with different time ranges
 
-### Known Issues
+### Technical Changes
 
-- Android version not fully tested
-- Some UI elements may need further optimization for different screen sizes
-- HealthKit integration limited to iOS devices
+- Updated HealthKit data retrieval to enforce one-year limit
+- Removed development-only console logs
+- Optimized database queries for better performance
+- Improved error handling in data retrieval
+
+## Version 1.0.0
+
+- Initial release of the Blood Glucose Tracker app
+- Basic functionality for tracking and managing blood glucose readings
+- Integration with Apple HealthKit
+- Local storage using SQLite
+- Basic chart visualization
+- Manual entry of readings
+- Settings for glucose ranges
 
 ## Version 0.9.0 (Beta)
 
