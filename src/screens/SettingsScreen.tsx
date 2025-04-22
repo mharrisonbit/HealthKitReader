@@ -102,33 +102,34 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     }
   };
 
-  const handleDeleteAllReadings = async () => {
+  const handleResetDatabase = async () => {
     Alert.alert(
-      'Delete All Readings',
-      'Are you sure you want to delete all readings? This action cannot be undone.',
+      'Reset Database',
+      'Are you sure you want to reset the database? This will delete all data and recreate the tables. This action cannot be undone.',
       [
         {
           text: 'Cancel',
           style: 'cancel',
         },
         {
-          text: 'Delete',
+          text: 'Reset',
           style: 'destructive',
           onPress: async () => {
             try {
-              await databaseService.deleteAllReadings();
-              Alert.alert(
-                'Success',
-                'All readings have been permanently deleted.',
-                [{text: 'OK'}],
-              );
+              setIsLoading(true);
+              await databaseService.resetDatabase();
+              Alert.alert('Success', 'Database has been reset successfully.', [
+                {text: 'OK'},
+              ]);
             } catch (error) {
-              console.error('Error deleting readings:', error);
+              console.error('Error resetting database:', error);
               Alert.alert(
                 'Error',
-                'Failed to delete readings. Please try again.',
+                'Failed to reset database. Please try again.',
                 [{text: 'OK'}],
               );
+            } finally {
+              setIsLoading(false);
             }
           },
         },
@@ -197,11 +198,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
 
             <View style={styles.buttonContainer}>
               <TouchableOpacity
-                style={[styles.button, styles.deleteButton]}
-                onPress={handleDeleteAllReadings}>
-                <Text style={styles.buttonText}>Delete All Readings</Text>
+                style={[styles.button, styles.resetButton]}
+                onPress={handleResetDatabase}>
+                <Text style={styles.buttonText}>Reset Database</Text>
                 <Text style={styles.buttonSubtext}>
-                  Permanently remove all stored readings
+                  Recreate database tables with latest schema
                 </Text>
               </TouchableOpacity>
             </View>
@@ -297,8 +298,8 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-  deleteButton: {
-    backgroundColor: '#FF3B30',
+  resetButton: {
+    backgroundColor: '#FF9500',
   },
   buttonText: {
     color: '#fff',

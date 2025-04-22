@@ -136,13 +136,20 @@ export class HealthService {
 
     const initialized = await this.initializeHealthKit();
     if (!initialized) {
-      // console.log(`[${new Date().toISOString()}] HealthKit not initialized`);
       return [];
     }
 
     try {
+      // Calculate the date one year ago from now
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+      // Use the later of the two dates (one year ago or provided start date)
+      const adjustedStartDate = new Date(
+        Math.max(oneYearAgo.getTime(), startDate.getTime()),
+      );
+
       // Add 1 day buffer to ensure we don't miss entries
-      const adjustedStartDate = new Date(startDate);
       adjustedStartDate.setDate(adjustedStartDate.getDate() - 1);
 
       const options = {
@@ -462,30 +469,23 @@ export class HealthService {
       // Initialize HealthKit
       await this.initializeHealthKit();
 
+      // Calculate the date one year ago from now
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+      // Use the later of the two dates (one year ago or provided start date)
+      const adjustedStartDate = new Date(
+        Math.max(oneYearAgo.getTime(), startDate.getTime()),
+      );
+
       // Get existing readings from the database
       const existingReadings = await this.databaseService.getAllReadings();
 
-      // Find the latest imported date
-      const latestImportedDate =
-        existingReadings.length > 0
-          ? new Date(
-              Math.max(...existingReadings.map(r => r.timestamp.getTime())),
-            )
-          : startDate;
-
-      // If we have existing readings, start from the day after the latest one
-      const adjustedStartDate =
-        existingReadings.length > 0
-          ? new Date(latestImportedDate.getTime() + 1) // Add 1 millisecond to avoid duplicate
-          : startDate;
-
-      // If the adjusted start date is after the end date, there's nothing to import
-      if (adjustedStartDate > endDate) {
-        return {importedCount: 0};
-      }
-
-      const existingTimestamps = new Set(
-        existingReadings.map(r => r.timestamp.getTime()),
+      // Create a map of existing HealthKit IDs for quick lookup
+      const existingHealthKitIds = new Set(
+        existingReadings
+          .filter(r => r.healthKitId)
+          .map(r => r.healthKitId as string),
       );
 
       // Get all readings from the adjusted start date to now in one query
@@ -494,11 +494,6 @@ export class HealthService {
         endDate: endDate.toISOString(),
         unit: 'mg/dL',
       };
-
-      // console.log('Querying HealthKit with date range:', {
-      //   startDate: options.startDate,
-      //   endDate: options.endDate,
-      // });
 
       const results = await new Promise<any[]>((resolve, reject) => {
         AppleHealthKit.getBloodGlucoseSamples(
@@ -513,15 +508,17 @@ export class HealthService {
         );
       });
 
-      // console.log(`Retrieved ${results.length} samples from HealthKit`);
-
-      // Filter out readings that already exist
+      // Filter out readings that already exist based on HealthKit ID
       const newReadings = results.filter(sample => {
-        const timestamp = new Date(sample.startDate).getTime();
-        return !existingTimestamps.has(timestamp);
+        return !existingHealthKitIds.has(sample.id);
       });
 
-      // console.log(`Found ${newReadings.length} new readings to import`);
+      // Sort readings by date to ensure chronological progress
+      newReadings.sort((a, b) => {
+        return (
+          new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        );
+      });
 
       let importedCount = 0;
 
@@ -532,7 +529,8 @@ export class HealthService {
           timestamp: new Date(sample.startDate),
           notes: sample.device || 'Apple Health',
           sourceName: 'Apple Health',
-          unit: 'mg/dL', // Add the unit field
+          unit: 'mg/dL',
+          healthKitId: sample.id, // Store the HealthKit ID
         };
 
         await this.databaseService.addReading(reading);

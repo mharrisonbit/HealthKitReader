@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useState, useRef} from 'react';
 import {
   View,
   Text,
@@ -6,45 +6,44 @@ import {
   Dimensions,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
 } from 'react-native';
-import {NativeStackScreenProps} from '@react-navigation/native-stack';
-import {LineChart, BarChart} from 'react-native-chart-kit';
+import {LineChart} from 'react-native-chart-kit';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
-
-type RootStackParamList = {
-  List: {
-    onDelete: (id: string) => void;
-  };
-  Add: {
-    onSave: (data: Omit<BloodGlucose, 'id'>) => void;
-  };
-  Charts: undefined;
-};
-
-type Props = NativeStackScreenProps<RootStackParamList, 'Charts'>;
+import {format} from 'date-fns';
 
 const databaseService = new DatabaseService();
 const screenWidth = Dimensions.get('window').width;
 
-export const BloodGlucoseChartScreen: React.FC<Props> = () => {
+const TIME_RANGES = [
+  {label: '1 Hour', value: 1},
+  {label: '3 Hours', value: 3},
+  {label: '6 Hours', value: 6},
+  {label: '12 Hours', value: 12},
+];
+
+export const BloodGlucoseChartScreen: React.FC = () => {
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [chartType, setChartType] = useState<'line' | 'bar'>('line');
+  const [selectedTimeRange, setSelectedTimeRange] = useState(6); // Default to 6 hours
+  const hasLoadedRef = useRef(false);
 
   const loadReadings = async () => {
+    if (hasLoadedRef.current) {
+      console.log('Data already loaded, skipping load');
+      return;
+    }
+
     try {
-      setIsLoading(true);
+      console.log('Starting to load readings...');
       setError(null);
       const savedReadings = await databaseService.getAllReadings();
+      console.log('Successfully loaded readings:', savedReadings.length);
       setReadings(savedReadings);
+      hasLoadedRef.current = true;
     } catch (error) {
       console.error('Error loading readings:', error);
       setError('Failed to load readings. Please try again.');
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -52,47 +51,21 @@ export const BloodGlucoseChartScreen: React.FC<Props> = () => {
     loadReadings();
   }, []);
 
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString();
-  };
-
-  const chartData = {
-    labels: readings.map(reading => formatDate(reading.timestamp)),
-    datasets: [
-      {
-        data: readings.map(reading => reading.value),
-      },
-    ],
-  };
-
-  const chartConfig = {
-    backgroundColor: '#ffffff',
-    backgroundGradientFrom: '#ffffff',
-    backgroundGradientTo: '#ffffff',
-    decimalPlaces: 0,
-    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-    style: {
-      borderRadius: 16,
-    },
-    propsForLabels: {
-      fontSize: 12,
-    },
-    propsForDots: {
-      r: '6',
-      strokeWidth: '2',
-      stroke: '#007AFF',
-    },
-  };
-
-  if (isLoading) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading chart data...</Text>
-      </View>
+  const getFilteredReadings = () => {
+    const now = new Date();
+    const startTime = new Date(
+      now.getTime() - selectedTimeRange * 60 * 60 * 1000,
     );
-  }
+    return readings
+      .filter(reading => reading.timestamp >= startTime)
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  };
+
+  const formatTime = (date: Date) => {
+    return format(date, 'h:mm a');
+  };
+
+  const filteredReadings = getFilteredReadings();
 
   if (error) {
     return (
@@ -113,77 +86,85 @@ export const BloodGlucoseChartScreen: React.FC<Props> = () => {
     );
   }
 
+  const chartData = {
+    labels:
+      filteredReadings.length > 0
+        ? [
+            formatTime(filteredReadings[0].timestamp),
+            ...Array(filteredReadings.length - 2).fill(''),
+            formatTime(filteredReadings[filteredReadings.length - 1].timestamp),
+          ]
+        : [],
+    datasets: [
+      {
+        data: filteredReadings.map(reading => reading.value),
+      },
+    ],
+  };
+
+  const chartConfig = {
+    backgroundColor: '#ffffff',
+    backgroundGradientFrom: '#ffffff',
+    backgroundGradientTo: '#ffffff',
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+    labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+    style: {
+      borderRadius: 16,
+    },
+    propsForLabels: {
+      fontSize: 10,
+    },
+    propsForDots: {
+      r: '4',
+      strokeWidth: '2',
+      stroke: '#007AFF',
+    },
+  };
+
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.chartTypeContainer}>
-        <TouchableOpacity
-          style={[
-            styles.chartTypeButton,
-            chartType === 'line' && styles.chartTypeButtonActive,
-          ]}
-          onPress={() => setChartType('line')}>
-          <Text
+      <View style={styles.timeRangeContainer}>
+        {TIME_RANGES.map(range => (
+          <TouchableOpacity
+            key={range.value}
             style={[
-              styles.chartTypeButtonText,
-              chartType === 'line' && styles.chartTypeButtonTextActive,
-            ]}>
-            Line Chart
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.chartTypeButton,
-            chartType === 'bar' && styles.chartTypeButtonActive,
-          ]}
-          onPress={() => setChartType('bar')}>
-          <Text
-            style={[
-              styles.chartTypeButtonText,
-              chartType === 'bar' && styles.chartTypeButtonTextActive,
-            ]}>
-            Bar Chart
-          </Text>
-        </TouchableOpacity>
+              styles.timeRangeButton,
+              selectedTimeRange === range.value && styles.timeRangeButtonActive,
+            ]}
+            onPress={() => setSelectedTimeRange(range.value)}>
+            <Text
+              style={[
+                styles.timeRangeButtonText,
+                selectedTimeRange === range.value &&
+                  styles.timeRangeButtonTextActive,
+              ]}>
+              {range.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <View style={styles.chartContainer}>
-        {chartType === 'line' ? (
-          <LineChart
-            data={chartData}
-            width={screenWidth - 20}
-            height={300}
-            chartConfig={chartConfig}
-            bezier
-            style={styles.chart}
-            yAxisLabel=""
-            yAxisSuffix={` ${readings[0]?.unit || ''}`}
-            withInnerLines={true}
-            withOuterLines={true}
-            withVerticalLines={true}
-            withHorizontalLines={true}
-            withDots={true}
-            withVerticalLabels={true}
-            withHorizontalLabels={true}
-            segments={5}
-            fromZero
-          />
-        ) : (
-          <BarChart
-            data={chartData}
-            width={screenWidth - 20}
-            height={300}
-            chartConfig={chartConfig}
-            style={styles.chart}
-            showBarTops={false}
-            fromZero
-            yAxisLabel=""
-            yAxisSuffix={` ${readings[0]?.unit || ''}`}
-            withInnerLines={true}
-            withVerticalLabels={true}
-            withHorizontalLabels={true}
-            segments={5}
-          />
-        )}
+        <LineChart
+          data={chartData}
+          width={screenWidth - 20}
+          height={300}
+          chartConfig={chartConfig}
+          bezier
+          style={styles.chart}
+          yAxisLabel=""
+          yAxisSuffix={` ${readings[0]?.unit || ''}`}
+          withInnerLines={true}
+          withOuterLines={true}
+          withVerticalLines={true}
+          withHorizontalLines={true}
+          withDots={true}
+          withVerticalLabels={true}
+          withHorizontalLabels={true}
+          segments={5}
+          fromZero={false}
+        />
       </View>
 
       <View style={styles.statsContainer}>
@@ -191,35 +172,34 @@ export const BloodGlucoseChartScreen: React.FC<Props> = () => {
         <View style={styles.statsRow}>
           <Text style={styles.statsLabel}>Average:</Text>
           <Text style={styles.statsValue}>
-            {(
-              readings.reduce((sum, reading) => sum + reading.value, 0) /
-              readings.length
-            ).toFixed(1)}{' '}
-            {readings[0]?.unit}
-          </Text>
-        </View>
-        <View style={styles.statsRow}>
-          <Text style={styles.statsLabel}>A1C (Estimated):</Text>
-          <Text style={styles.statsValue}>
-            {(
-              (readings.reduce((sum, reading) => sum + reading.value, 0) /
-                readings.length +
-                46.7) /
-              28.7
-            ).toFixed(1)}
-            %
+            {filteredReadings.length > 0
+              ? `${(
+                  filteredReadings.reduce(
+                    (sum, reading) => sum + reading.value,
+                    0,
+                  ) / filteredReadings.length
+                ).toFixed(1)} ${readings[0]?.unit}`
+              : 'N/A'}
           </Text>
         </View>
         <View style={styles.statsRow}>
           <Text style={styles.statsLabel}>Highest:</Text>
           <Text style={styles.statsValue}>
-            {Math.max(...readings.map(r => r.value))} {readings[0]?.unit}
+            {filteredReadings.length > 0
+              ? `${Math.max(...filteredReadings.map(r => r.value))} ${
+                  readings[0]?.unit
+                }`
+              : 'N/A'}
           </Text>
         </View>
         <View style={styles.statsRow}>
           <Text style={styles.statsLabel}>Lowest:</Text>
           <Text style={styles.statsValue}>
-            {Math.min(...readings.map(r => r.value))} {readings[0]?.unit}
+            {filteredReadings.length > 0
+              ? `${Math.min(...filteredReadings.map(r => r.value))} ${
+                  readings[0]?.unit
+                }`
+              : 'N/A'}
           </Text>
         </View>
       </View>
@@ -238,26 +218,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
-  chartTypeContainer: {
+  timeRangeContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     padding: 20,
     gap: 10,
   },
-  chartTypeButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+  timeRangeButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
     borderRadius: 8,
     backgroundColor: '#f0f0f0',
   },
-  chartTypeButtonActive: {
+  timeRangeButtonActive: {
     backgroundColor: '#007AFF',
   },
-  chartTypeButtonText: {
-    fontSize: 16,
+  timeRangeButtonText: {
+    fontSize: 14,
     color: '#333',
   },
-  chartTypeButtonTextActive: {
+  timeRangeButtonTextActive: {
     color: '#fff',
   },
   chartContainer: {
@@ -304,11 +284,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
   },
   errorText: {
     fontSize: 16,
