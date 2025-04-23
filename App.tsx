@@ -46,7 +46,7 @@ const HomeStack = () => (
     <Stack.Screen
       name="Home"
       component={HomeScreen}
-      options={{title: 'Blood Glucose Tracker'}}
+      options={{title: 'Blood Glucoses Tracker'}}
     />
     <Stack.Screen
       name="Add"

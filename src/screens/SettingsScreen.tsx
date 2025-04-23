@@ -38,6 +38,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     high: 180,
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const commonRanges = [
     {label: 'Standard/ADA/AACE Guidelines', low: 70, high: 180},
@@ -137,6 +138,91 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     );
   };
 
+  const handleImportFromHealth = async () => {
+    try {
+      setIsImporting(true);
+      const healthService = HealthService.getInstance();
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setFullYear(startDate.getFullYear() - 1); // Get last year of data
+
+      const {healthKit, googleFit} =
+        await healthService.getAllBloodGlucoseReadings(startDate, endDate);
+
+      // Get existing readings from our database
+      const existingReadings = await databaseService.getAllReadings();
+
+      // Create a map of existing readings for quick lookup
+      const existingReadingsMap = new Map(
+        existingReadings.map(reading => [
+          `${Math.floor(reading.timestamp.getTime() / (5 * 60 * 1000))}_${
+            reading.value
+          }`,
+          reading,
+        ]),
+      );
+
+      let importedCount = 0;
+      let duplicateCount = 0;
+
+      // Process HealthKit readings
+      for (const reading of healthKit) {
+        const readingTime = new Date(reading.startDate).getTime();
+        const timeWindow = Math.floor(readingTime / (5 * 60 * 1000));
+        const readingKey = `${timeWindow}_${reading.value}`;
+
+        // Check if this reading already exists in our database
+        if (existingReadingsMap.has(readingKey)) {
+          duplicateCount++;
+          continue;
+        }
+
+        // Only import if we don't already have this reading
+        await databaseService.addReading({
+          value: reading.value,
+          unit: 'mg/dL',
+          timestamp: new Date(reading.startDate),
+          sourceName: 'Apple Health',
+          notes: 'Imported from Apple Health',
+        });
+        importedCount++;
+      }
+
+      // Process Google Fit readings
+      for (const reading of googleFit) {
+        const readingTime = new Date(reading.date).getTime();
+        const timeWindow = Math.floor(readingTime / (5 * 60 * 1000));
+        const readingKey = `${timeWindow}_${reading.value}`;
+
+        // Check if this reading already exists in our database
+        if (existingReadingsMap.has(readingKey)) {
+          duplicateCount++;
+          continue;
+        }
+
+        // Only import if we don't already have this reading
+        await databaseService.addReading({
+          value: reading.value,
+          unit: 'mg/dL',
+          timestamp: new Date(reading.date),
+          sourceName: reading.sourceName || 'Google Fit',
+          notes: `Imported from ${reading.sourceName || 'Google Fit'}`,
+        });
+        importedCount++;
+      }
+
+      Alert.alert(
+        'Import Complete',
+        `Successfully imported ${importedCount} new readings\n${duplicateCount} duplicates were skipped`,
+      );
+    } catch (error) {
+      console.error('Error importing readings:', error);
+      Alert.alert('Error', 'Failed to import readings');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.container}>
       <Pressable style={styles.container} onPress={Keyboard.dismiss}>
@@ -197,6 +283,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
             </Text>
 
             <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={[styles.button, styles.importButton]}
+                onPress={handleImportFromHealth}
+                disabled={isImporting}>
+                {isImporting ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Text style={styles.buttonText}>Import from Health</Text>
+                    <Text style={styles.buttonSubtext}>
+                      Import blood glucose readings from {serviceName}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={[styles.button, styles.resetButton]}
                 onPress={handleResetDatabase}>
@@ -322,5 +424,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
+  },
+  importButton: {
+    backgroundColor: '#5856D6',
   },
 });
