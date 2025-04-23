@@ -12,7 +12,7 @@ import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {format} from 'date-fns';
 
-const databaseService = new DatabaseService();
+const databaseService = DatabaseService.getInstance();
 const screenWidth = Dimensions.get('window').width;
 
 const TIME_RANGES = [
@@ -26,24 +26,21 @@ export const BloodGlucoseChartScreen: React.FC = () => {
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState(6); // Default to 6 hours
-  const hasLoadedRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const loadReadings = async () => {
-    if (hasLoadedRef.current) {
-      console.log('Data already loaded, skipping load');
-      return;
-    }
-
     try {
       console.log('Starting to load readings...');
       setError(null);
+      setIsLoading(true);
       const savedReadings = await databaseService.getAllReadings();
       console.log('Successfully loaded readings:', savedReadings.length);
       setReadings(savedReadings);
-      hasLoadedRef.current = true;
     } catch (error) {
       console.error('Error loading readings:', error);
       setError('Failed to load readings. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -66,6 +63,14 @@ export const BloodGlucoseChartScreen: React.FC = () => {
   };
 
   const filteredReadings = getFilteredReadings();
+
+  if (isLoading) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.loadingText}>Loading readings...</Text>
+      </View>
+    );
+  }
 
   if (error) {
     return (
@@ -306,5 +311,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 10,
   },
 });

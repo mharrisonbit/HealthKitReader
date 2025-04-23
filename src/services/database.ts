@@ -8,8 +8,18 @@ const database_name = 'BloodGlucose.db';
 const database_version = 3; // Increment version for schema change
 
 export class DatabaseService {
+  private static instance: DatabaseService | null = null;
   private db: SQLite.SQLiteDatabase | null = null;
   private isInitialized = false;
+
+  private constructor() {}
+
+  public static getInstance(): DatabaseService {
+    if (!DatabaseService.instance) {
+      DatabaseService.instance = new DatabaseService();
+    }
+    return DatabaseService.instance;
+  }
 
   async initDB() {
     if (this.isInitialized) {
@@ -260,8 +270,10 @@ export class DatabaseService {
     startDate: Date,
     endDate: Date,
   ): Promise<BloodGlucose[]> {
+    console.log('Getting readings by date range...');
     await this.ensureInitialized();
     if (!this.db) {
+      console.error('Database not initialized');
       throw new Error('Database not initialized');
     }
 
@@ -270,6 +282,7 @@ export class DatabaseService {
         'SELECT * FROM blood_glucose WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp DESC',
         [startDate.toISOString(), endDate.toISOString()],
       );
+      console.log('Query executed successfully, processing results...');
 
       const readings: BloodGlucose[] = [];
       for (let i = 0; i < result[0].rows.length; i++) {
@@ -279,10 +292,11 @@ export class DatabaseService {
           value: row.value,
           unit: row.unit,
           timestamp: new Date(row.timestamp),
-          sourceName: row.sourceName || 'Manual',
+          sourceName: row.sourceName || 'Manual Entry',
           notes: row.notes || undefined,
         });
       }
+      console.log(`Processed ${readings.length} readings for date range`);
       return readings;
     } catch (error) {
       console.error('Error getting readings by date range:', error);

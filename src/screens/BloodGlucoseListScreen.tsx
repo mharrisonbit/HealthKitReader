@@ -6,12 +6,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
+  Modal,
 } from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
-import {HealthService} from '../services/healthService';
 import {format} from 'date-fns';
 
 type RootStackParamList = {
@@ -24,14 +23,25 @@ type RootStackParamList = {
 
 type Props = NativeStackScreenProps<RootStackParamList, 'List'>;
 
-const databaseService = new DatabaseService();
-const healthService = HealthService.getInstance();
+const databaseService = DatabaseService.getInstance();
 
 export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedReading, setSelectedReading] = useState<BloodGlucose | null>(
+    null,
+  );
+  const [showHealthKitModal, setShowHealthKitModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
+
+  const getUniqueDays = (readings: BloodGlucose[]) => {
+    const uniqueDates = new Set(
+      readings.map(reading =>
+        format(new Date(reading.timestamp), 'yyyy-MM-dd'),
+      ),
+    );
+    return uniqueDates.size;
+  };
 
   const loadReadings = async () => {
     try {
@@ -48,7 +58,6 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   };
 
   useEffect(() => {
-    // console.log({AppleHealthKit});
     const unsubscribe = navigation.addListener('focus', () => {
       loadReadings();
     });
@@ -56,176 +65,12 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
     return unsubscribe;
   }, [navigation]);
 
-  const handleDelete = async (id: string) => {
-    try {
-      await databaseService.deleteReading(id);
-      await loadReadings();
-    } catch (error) {
-      console.error('Error deleting reading:', error);
+  const handleReadingPress = (reading: BloodGlucose) => {
+    setSelectedReading(reading);
+    if (reading.sourceName === 'Apple Health' || reading.healthKitId) {
+      setShowHealthKitModal(true);
     }
   };
-
-  const handleImportFromHealth = async () => {
-    try {
-      setIsImporting(true);
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setMonth(startDate.getMonth() - 3); // Get last 3 months of data
-
-      console.tron.log('Starting health data import', {startDate, endDate});
-
-      const {healthKit, googleFit} =
-        await healthService.getAllBloodGlucoseReadings(startDate, endDate);
-
-      console.tron.log('Retrieved health data', {
-        healthKitCount: healthKit.length,
-        googleFitCount: googleFit.length,
-      });
-
-      // Get existing readings from our database
-      const existingReadings = await databaseService.getAllReadings();
-
-      console.tron.log('Existing readings count', existingReadings.length);
-
-      // Create a map of existing readings for quick lookup
-      // Use a 5-minute window to account for slight time differences
-      const existingReadingsMap = new Map(
-        existingReadings.map(reading => [
-          `${Math.floor(reading.timestamp.getTime() / (5 * 60 * 1000))}_${
-            reading.value
-          }`,
-          reading,
-        ]),
-      );
-
-      let importedCount = 0;
-      let duplicateCount = 0;
-      let skippedAppOriginalsCount = 0;
-
-      // Process HealthKit readings
-      for (const reading of healthKit) {
-        const readingTime = new Date(reading.startDate).getTime();
-        const timeWindow = Math.floor(readingTime / (5 * 60 * 1000));
-        const readingKey = `${timeWindow}_${reading.value}`;
-
-        // Check if this reading already exists in our database
-        const existingReading = existingReadingsMap.get(readingKey);
-
-        if (existingReading) {
-          // If the reading exists and was originally from our app, skip it
-          if (
-            existingReading.sourceName === 'App' ||
-            existingReading.sourceName === 'Manual Entry' ||
-            existingReading.sourceName === 'Manual'
-          ) {
-            skippedAppOriginalsCount++;
-            continue;
-          }
-          duplicateCount++;
-          continue;
-        }
-
-        // Only import if we don't already have this reading
-        await databaseService.addReading({
-          value: reading.value,
-          unit: 'mg/dL',
-          timestamp: new Date(reading.startDate),
-          sourceName: 'Apple Health',
-          notes: 'Imported from Apple Health',
-        });
-        importedCount++;
-      }
-
-      // Process Google Fit readings
-      for (const reading of googleFit) {
-        const readingTime = new Date(reading.date).getTime();
-        const timeWindow = Math.floor(readingTime / (5 * 60 * 1000));
-        const readingKey = `${timeWindow}_${reading.value}`;
-
-        // Check if this reading already exists in our database
-        const existingReading = existingReadingsMap.get(readingKey);
-
-        if (existingReading) {
-          // If the reading exists and was originally from our app, skip it
-          if (
-            existingReading.sourceName === 'App' ||
-            existingReading.sourceName === 'Manual Entry' ||
-            existingReading.sourceName === 'Manual'
-          ) {
-            skippedAppOriginalsCount++;
-            continue;
-          }
-          duplicateCount++;
-          continue;
-        }
-
-        // Only import if we don't already have this reading
-        await databaseService.addReading({
-          value: reading.value,
-          unit: 'mg/dL',
-          timestamp: new Date(reading.date),
-          sourceName: reading.sourceName || 'Google Fit',
-          notes: `Imported from ${reading.sourceName || 'Google Fit'}`,
-        });
-        importedCount++;
-      }
-
-      console.tron.log('Import complete', {
-        importedCount,
-        duplicateCount,
-        skippedAppOriginalsCount,
-        totalProcessed: healthKit.length + googleFit.length,
-      });
-
-      await loadReadings();
-      Alert.alert(
-        'Import Complete',
-        `Successfully imported ${importedCount} new readings\n${duplicateCount} duplicates were skipped\n${skippedAppOriginalsCount} app-originated readings were skipped`,
-      );
-    } catch (error) {
-      console.tron.error('Error importing health data:', error);
-      console.error('Error importing health data:', error);
-      Alert.alert(
-        'Import Failed',
-        'Failed to import health data. Please try again.',
-      );
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  const getUniqueDays = (readings: BloodGlucose[]) => {
-    const uniqueDates = new Set(
-      readings.map(reading =>
-        format(new Date(reading.timestamp), 'yyyy-MM-dd'),
-      ),
-    );
-    return uniqueDates.size;
-  };
-
-  const getAverageReadingsPerDay = (readings: BloodGlucose[]) => {
-    const uniqueDays = getUniqueDays(readings);
-    if (uniqueDays === 0) return 0;
-    return (readings.length / uniqueDays).toFixed(1);
-  };
-
-  const renderItem = ({item}: {item: BloodGlucose}) => (
-    <View style={styles.readingItem}>
-      <View style={styles.readingInfo}>
-        <Text style={styles.readingValue}>
-          {item.value} {item.unit}
-        </Text>
-        <Text style={styles.readingDate}>
-          {format(new Date(item.timestamp), 'MMM d, yyyy h:mm a')}
-        </Text>
-      </View>
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => handleDelete(item.id)}>
-        <Text style={styles.deleteButtonText}>Delete</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   if (isLoading) {
     return (
@@ -249,43 +94,106 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Days</Text>
-          <Text style={styles.statValue}>{getUniqueDays(readings)}</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Readings</Text>
-          <Text style={styles.statValue}>{readings.length}</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statLabel}>Avg/Day</Text>
-          <Text style={styles.statValue}>
-            {getAverageReadingsPerDay(readings)}
-          </Text>
-        </View>
+      <View style={styles.header}>
+        <Text style={styles.title}>Blood Glucose History</Text>
+        {!isLoading && readings.length > 0 && (
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Total Readings</Text>
+              <Text style={styles.summaryValue}>{readings.length}</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Days Recorded</Text>
+              <Text style={styles.summaryValue}>{getUniqueDays(readings)}</Text>
+            </View>
+          </View>
+        )}
       </View>
 
-      <TouchableOpacity
-        style={styles.importButton}
-        onPress={handleImportFromHealth}
-        disabled={isImporting}>
-        {isImporting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.importButtonText}>Import from Health</Text>
-        )}
-      </TouchableOpacity>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#5856D6" />
+        </View>
+      ) : readings.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No readings found</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={readings}
+          keyExtractor={item => item.id.toString()}
+          renderItem={({item}) => (
+            <TouchableOpacity
+              style={styles.readingItem}
+              onPress={() => handleReadingPress(item)}>
+              <View style={styles.readingInfo}>
+                <Text style={styles.readingValue}>{item.value} mg/dL</Text>
+                <View style={styles.readingDetails}>
+                  <Text style={styles.readingDate}>
+                    {format(new Date(item.timestamp), 'MMM d, yyyy h:mm a')}
+                  </Text>
+                  <Text style={styles.readingSource}>{item.sourceName}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
+      )}
 
-      <FlatList
-        data={readings}
-        renderItem={renderItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No readings yet</Text>
-        }
-      />
+      <Modal
+        visible={showHealthKitModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowHealthKitModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>HealthKit Data</Text>
+            {selectedReading && (
+              <>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Value:</Text>
+                  <Text style={styles.modalValue}>
+                    {selectedReading.value} mg/dL
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Date:</Text>
+                  <Text style={styles.modalValue}>
+                    {format(selectedReading.timestamp, 'MMM d, yyyy h:mm a')}
+                  </Text>
+                </View>
+                <View style={styles.modalRow}>
+                  <Text style={styles.modalLabel}>Source:</Text>
+                  <Text style={styles.modalValue}>
+                    {selectedReading.sourceName}
+                  </Text>
+                </View>
+                {selectedReading.notes && (
+                  <View style={styles.modalRow}>
+                    <Text style={styles.modalLabel}>Notes:</Text>
+                    <Text style={styles.modalValue}>
+                      {selectedReading.notes}
+                    </Text>
+                  </View>
+                )}
+                {selectedReading.healthKitId && (
+                  <View style={styles.modalRow}>
+                    <Text style={styles.modalLabel}>HealthKit ID:</Text>
+                    <Text style={styles.modalValue}>
+                      {selectedReading.healthKitId}
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setShowHealthKitModal(false)}>
+              <Text style={styles.modalButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -301,20 +209,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
-  importButton: {
-    backgroundColor: '#5856D6',
-    margin: 16,
-    padding: 12,
-    borderRadius: 8,
+  header: {
+    padding: 16,
+    backgroundColor: '#f8f8f8',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  importButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  list: {
-    padding: 16,
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   readingItem: {
     flexDirection: 'row',
@@ -341,21 +255,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
+  readingDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
   readingDate: {
     fontSize: 14,
     color: '#666',
-    marginTop: 4,
   },
-  deleteButton: {
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  deleteButtonText: {
-    color: '#fff',
+  readingSource: {
     fontSize: 14,
-    fontWeight: 'bold',
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 20,
   },
   loadingText: {
     marginTop: 10,
@@ -379,32 +298,72 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  emptyText: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    width: '80%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  modalLabel: {
     fontSize: 16,
     color: '#666',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 16,
-    backgroundColor: '#f8f8f8',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  statItem: {
-    alignItems: 'center',
     flex: 1,
   },
-  statLabel: {
+  modalValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    flex: 2,
+    textAlign: 'right',
+  },
+  modalButton: {
+    backgroundColor: '#5856D6',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 20,
+  },
+  modalButtonText: {
+    color: 'white',
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  summaryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+  },
+  summaryItem: {
+    alignItems: 'center',
+  },
+  summaryLabel: {
     fontSize: 14,
     color: '#666',
     marginBottom: 4,
   },
-  statValue: {
-    fontSize: 24,
+  summaryValue: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#333',
   },
 });

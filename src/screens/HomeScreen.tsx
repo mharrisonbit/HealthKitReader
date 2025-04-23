@@ -6,99 +6,103 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
+import {SettingsService} from '../services/settingsService';
 import {subDays, subMonths} from 'date-fns';
-import {TimeRangeSelector} from '../components/TimeRangeSelector';
 
-const databaseService = new DatabaseService();
+const databaseService = DatabaseService.getInstance();
+const settingsService = SettingsService.getInstance();
 
-const A1C_TIME_RANGES = [
-  {label: '1 Week', value: '7'},
-  {label: '2 Weeks', value: '14'},
-  {label: '1 Month', value: '30'},
-  {label: '2 Months', value: '60'},
-  {label: '3 Months', value: '90'},
-  {label: '6 Months', value: '180'},
-  {label: '1 Year', value: '365'},
+const TIME_RANGES = [
+  {label: '1W', value: 7},
+  {label: '2W', value: 14},
+  {label: '1M', value: 30},
+  {label: '3M', value: 90},
+  {label: '6M', value: 180},
+  {label: '1Y', value: 365},
 ];
 
 export const HomeScreen: React.FC = () => {
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [_isEditing, _setIsEditing] = useState(false);
-  const [_editingReading, _setEditingReading] = useState<BloodGlucose | null>(
-    null,
-  );
-  const [_isImporting, _setIsImporting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [a1cValue, setA1cValue] = useState<number | null>(null);
-  const [a1cStatus, setA1cStatus] = useState<string>('N/A');
+  const [a1cStatus, setA1cStatus] = useState<string | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState<number>(90); // Default to 3 months
+  const [_ranges, _setRanges] = useState({low: 70, high: 180});
 
   const calculateA1c = useCallback(
     (readings: BloodGlucose[]): number | null => {
       if (readings.length === 0) return null;
 
-      // Filter readings based on selected time range
-      const now = new Date();
-      const cutoffDate =
-        selectedTimeRange <= 31
-          ? subDays(now, selectedTimeRange)
-          : subMonths(now, Math.ceil(selectedTimeRange / 30));
-
-      const filteredReadings = readings.filter(
-        reading => new Date(reading.timestamp) >= cutoffDate,
+      console.log('Calculating A1C for readings count:', readings.length);
+      console.log(
+        'Sample of readings:',
+        readings.slice(0, 3).map(r => ({
+          value: r.value,
+          timestamp: new Date(r.timestamp),
+        })),
       );
 
-      if (filteredReadings.length === 0) return null;
-
-      const totalGlucose = filteredReadings.reduce(
+      const totalGlucose = readings.reduce(
         (sum, reading) => sum + reading.value,
         0,
       );
-      const averageGlucose = totalGlucose / filteredReadings.length;
+      const averageGlucose = totalGlucose / readings.length;
+      console.log('Average glucose:', averageGlucose);
 
       // Convert average glucose to A1c using the formula: A1c = (average glucose + 46.7) / 28.7
       const a1c = (averageGlucose + 46.7) / 28.7;
-      return Number(a1c.toFixed(1));
+      const roundedA1c = Number(a1c.toFixed(1));
+      console.log('Calculated A1C:', roundedA1c);
+      return roundedA1c;
     },
-    [selectedTimeRange],
+    [],
   );
 
   const calculateAverageGlucose = useCallback(
     (readings: BloodGlucose[]): number | null => {
       if (readings.length === 0) return null;
 
-      // Filter readings based on selected time range
-      const now = new Date();
-      const cutoffDate =
-        selectedTimeRange <= 31
-          ? subDays(now, selectedTimeRange)
-          : subMonths(now, Math.ceil(selectedTimeRange / 30));
-
-      const filteredReadings = readings.filter(
-        reading => new Date(reading.timestamp) >= cutoffDate,
+      console.log(
+        'Calculating average glucose for readings count:',
+        readings.length,
+      );
+      console.log(
+        'Sample of readings:',
+        readings.slice(0, 3).map(r => ({
+          value: r.value,
+          timestamp: new Date(r.timestamp),
+        })),
       );
 
-      if (filteredReadings.length === 0) return null;
-
-      const totalGlucose = filteredReadings.reduce(
+      const totalGlucose = readings.reduce(
         (sum, reading) => sum + reading.value,
         0,
       );
-      return Number((totalGlucose / filteredReadings.length).toFixed(1));
+      const average = totalGlucose / readings.length;
+      console.log('Average glucose:', average);
+      return Number(average.toFixed(1));
     },
-    [selectedTimeRange],
+    [],
   );
 
   const calculateMetrics = useCallback(
     (readings: BloodGlucose[]) => {
-      const newA1c = calculateA1c(readings);
-      setA1cValue(newA1c);
-      const a1cString = newA1c !== null ? newA1c.toString() : null;
-      setA1cStatus(getA1CStatus(a1cString));
+      try {
+        console.log('Calculating metrics for readings count:', readings.length);
+        const newA1c = calculateA1c(readings);
+        console.log('New A1C value:', newA1c);
+        setA1cValue(newA1c);
+        const a1cString = newA1c !== null ? newA1c.toString() : null;
+        setA1cStatus(getA1CStatus(a1cString));
+      } catch (error) {
+        console.error('Error calculating metrics:', error);
+        setA1cValue(null);
+        setA1cStatus(null);
+      }
     },
     [calculateA1c],
   );
@@ -106,29 +110,61 @@ export const HomeScreen: React.FC = () => {
   const loadReadings = useCallback(async () => {
     try {
       setIsLoading(true);
-      const allReadings = await databaseService.getAllReadings();
-      setReadings(allReadings);
-      calculateMetrics(allReadings);
+      const now = new Date();
+      const startDate =
+        selectedTimeRange <= 31
+          ? subDays(now, selectedTimeRange)
+          : subMonths(now, Math.ceil(selectedTimeRange / 30));
+
+      console.log('Loading readings from:', startDate, 'to:', now);
+      const filteredReadings = await databaseService.getReadingsByDateRange(
+        startDate,
+        now,
+      );
+      console.log('Loaded readings count:', filteredReadings.length);
+      setReadings(filteredReadings);
+      calculateMetrics(filteredReadings);
     } catch (error) {
       console.error('Error loading readings:', error);
+      Alert.alert('Error', 'Failed to load readings');
     } finally {
       setIsLoading(false);
     }
-  }, [calculateMetrics]);
+  }, [calculateMetrics, selectedTimeRange]);
 
   useEffect(() => {
     loadReadings();
   }, [loadReadings]);
 
-  const handleTimeRangeChange = useCallback(
-    async (value: string) => {
-      setIsCalculating(true);
-      setSelectedTimeRange(parseInt(value, 10));
+  // Add new useEffect to recalculate metrics when time range changes
+  useEffect(() => {
+    console.log('Time range changed to:', selectedTimeRange);
+    if (readings.length > 0) {
+      console.log('Recalculating metrics for time range change');
       calculateMetrics(readings);
-      setIsCalculating(false);
-    },
-    [readings, calculateMetrics],
-  );
+    } else {
+      console.log('No readings available for recalculation');
+    }
+  }, [selectedTimeRange, readings, calculateMetrics]);
+
+  useEffect(() => {
+    const loadRanges = async () => {
+      try {
+        const savedRanges = await settingsService.getRanges();
+        _setRanges({
+          low: savedRanges.useCustomRanges
+            ? savedRanges.customLow ?? savedRanges.low
+            : savedRanges.low,
+          high: savedRanges.useCustomRanges
+            ? savedRanges.customHigh ?? savedRanges.high
+            : savedRanges.high,
+        });
+      } catch (error) {
+        console.error('Error loading ranges:', error);
+      }
+    };
+    loadRanges();
+  }, []);
 
   const getA1CStatus = (a1c: string | null): string => {
     if (a1c === null) return 'N/A';
@@ -150,19 +186,6 @@ export const HomeScreen: React.FC = () => {
     return '#4CAF50'; // Green for normal
   };
 
-  const handleImport = async () => {
-    try {
-      _setIsImporting(true);
-      await loadReadings();
-      Alert.alert('Success', 'Readings imported successfully');
-    } catch (error) {
-      console.error('Error importing readings:', error);
-      Alert.alert('Error', 'Failed to import readings');
-    } finally {
-      _setIsImporting(false);
-    }
-  };
-
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -173,57 +196,68 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.a1cContainer}>
-        <Text style={styles.a1cLabel}>Estimated A1C</Text>
-        <TimeRangeSelector
-          options={A1C_TIME_RANGES}
-          selectedValue={selectedTimeRange}
-          onSelect={handleTimeRangeChange}
-          style={styles.timeRangeSelector}
-        />
-        {isCalculating ? (
-          <View style={styles.calculationContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
-          </View>
-        ) : (
-          <>
-            <Text
+      <View style={styles.header}>
+        <Text style={styles.title}>Blood Glucose Tracker</Text>
+      </View>
+
+      <ScrollView style={styles.content}>
+        <View style={styles.timeRangeContainer}>
+          {TIME_RANGES.map(range => (
+            <TouchableOpacity
+              key={range.value}
               style={[
-                styles.a1cValue,
-                {color: getA1CColor(a1cValue?.toString() ?? null)},
-              ]}>
-              {a1cValue !== null ? `${a1cValue}%` : 'N/A'}
+                styles.timeRangeButton,
+                selectedTimeRange === range.value &&
+                  styles.timeRangeButtonActive,
+              ]}
+              onPress={() => {
+                console.log('Time range button pressed:', range.value);
+                setSelectedTimeRange(range.value);
+              }}>
+              <Text
+                style={[
+                  styles.timeRangeButtonText,
+                  selectedTimeRange === range.value &&
+                    styles.timeRangeButtonTextActive,
+                ]}>
+                {range.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Current</Text>
+            <Text style={styles.statValue}>
+              {readings.length > 0
+                ? `${readings[0].value} mg/dL`
+                : 'No readings'}
             </Text>
-            <Text style={styles.a1cStatus}>{a1cStatus}</Text>
-          </>
-        )}
-      </View>
-
-      <View style={styles.averageGlucoseContainer}>
-        <Text style={styles.averageGlucoseLabel}>Average Glucose</Text>
-        {isCalculating ? (
-          <View style={styles.calculationContainer}>
-            <ActivityIndicator size="small" color="#007AFF" />
           </View>
-        ) : (
-          <Text style={styles.averageGlucoseValue}>
-            {calculateAverageGlucose(readings) !== null
-              ? `${calculateAverageGlucose(readings)} mg/dL`
-              : 'N/A'}
-          </Text>
-        )}
-      </View>
 
-      <TouchableOpacity
-        style={styles.importButton}
-        onPress={handleImport}
-        disabled={_isImporting}>
-        {_isImporting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.importButtonText}>Import from Health</Text>
-        )}
-      </TouchableOpacity>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Average</Text>
+            <Text style={styles.statValue}>
+              {calculateAverageGlucose(readings) !== null
+                ? `${calculateAverageGlucose(readings)} mg/dL`
+                : 'No readings'}
+            </Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Estimated A1C</Text>
+            <Text style={styles.statValue}>
+              {a1cValue ? `${a1cValue.toFixed(1)}%` : 'No readings'}
+            </Text>
+            {a1cStatus && (
+              <Text style={[styles.a1cStatus, {color: getA1CColor(a1cStatus)}]}>
+                {a1cStatus}
+              </Text>
+            )}
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 };
@@ -233,62 +267,74 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  a1cContainer: {
-    alignItems: 'center',
+  header: {
     padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    backgroundColor: '#5856D6',
+    alignItems: 'center',
   },
-  a1cLabel: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 4,
-  },
-  a1cValue: {
-    fontSize: 32,
+  title: {
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: '#fff',
   },
-  a1cStatus: {
+  content: {
+    flex: 1,
+  },
+  timeRangeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#f8f8f8',
+  },
+  timeRangeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  timeRangeButtonActive: {
+    backgroundColor: '#5856D6',
+    borderColor: '#5856D6',
+  },
+  timeRangeButtonText: {
     fontSize: 14,
     color: '#666',
   },
-  timeRangeSelector: {
-    marginBottom: 16,
+  timeRangeButtonTextActive: {
+    color: '#fff',
   },
-  averageGlucoseContainer: {
-    alignItems: 'center',
+  statsContainer: {
+    flex: 1,
     padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
-  averageGlucoseLabel: {
+  statCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statLabel: {
     fontSize: 16,
     color: '#666',
     marginBottom: 4,
   },
-  averageGlucoseValue: {
+  statValue: {
     fontSize: 32,
     fontWeight: 'bold',
     color: '#007AFF',
   },
-  importButton: {
-    backgroundColor: '#5856D6',
-    margin: 16,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  importButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  calculationContainer: {
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  a1cStatus: {
+    fontSize: 14,
+    marginTop: 4,
   },
 });
