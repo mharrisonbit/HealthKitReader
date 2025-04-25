@@ -27,8 +27,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'List'>;
 const databaseService = DatabaseService.getInstance();
 const settingsService = SettingsService.getInstance();
 
+type FilterType = 'all' | 'low' | 'normal' | 'high';
+
 export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
+  const [filteredReadings, setFilteredReadings] = useState<BloodGlucose[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReading, setSelectedReading] = useState<BloodGlucose | null>(
     null,
@@ -36,6 +39,7 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   const [showHealthKitModal, setShowHealthKitModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ranges, setRanges] = useState({low: 70, high: 180});
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   const getUniqueDays = (readings: BloodGlucose[]) => {
     const uniqueDates = new Set(
@@ -68,6 +72,7 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
       setError(null);
       const savedReadings = await databaseService.getAllReadings();
       setReadings(savedReadings);
+      setFilteredReadings(savedReadings);
     } catch (error) {
       console.error('Error loading readings:', error);
       setError('Failed to load readings. Please try again.');
@@ -100,6 +105,19 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
         return '#FF3B30'; // Red for high
       default:
         return '#4CAF50'; // Green for normal
+    }
+  };
+
+  const handleFilterChange = (filter: FilterType) => {
+    setActiveFilter(filter);
+    if (filter === 'all') {
+      setFilteredReadings(readings);
+    } else {
+      const filtered = readings.filter(reading => {
+        const status = getReadingStatus(reading.value);
+        return status === filter;
+      });
+      setFilteredReadings(filtered);
     }
   };
 
@@ -146,19 +164,81 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
             </View>
           </View>
         )}
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'all' && styles.filterButtonActive,
+            ]}
+            onPress={() => handleFilterChange('all')}>
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'all' && styles.filterButtonTextActive,
+              ]}>
+              All
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'low' && styles.filterButtonActive,
+            ]}
+            onPress={() => handleFilterChange('low')}>
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'low' && styles.filterButtonTextActive,
+              ]}>
+              Low
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'normal' && styles.filterButtonActive,
+            ]}
+            onPress={() => handleFilterChange('normal')}>
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'normal' && styles.filterButtonTextActive,
+              ]}>
+              In Range
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              activeFilter === 'high' && styles.filterButtonActive,
+            ]}
+            onPress={() => handleFilterChange('high')}>
+            <Text
+              style={[
+                styles.filterButtonText,
+                activeFilter === 'high' && styles.filterButtonTextActive,
+              ]}>
+              High
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#5856D6" />
         </View>
-      ) : readings.length === 0 ? (
+      ) : filteredReadings.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No readings found</Text>
+          <Text style={styles.emptyText}>
+            {activeFilter === 'all'
+              ? 'No readings found'
+              : `No ${activeFilter} readings found`}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={readings}
+          data={filteredReadings}
           keyExtractor={item => item.id.toString()}
           renderItem={({item}) => (
             <TouchableOpacity
@@ -417,5 +497,31 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+    padding: 4,
+  },
+  filterButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: '#5856D6',
+  },
+  filterButtonText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  filterButtonTextActive: {
+    color: '#fff',
   },
 });
