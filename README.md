@@ -2,6 +2,24 @@
 
 A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with Apple HealthKit for iOS.
 
+## Features
+
+- Track blood glucose readings
+- View readings in list or grid format
+- Calculate and display key metrics:
+  - Current reading
+  - Estimated A1C
+  - Average glucose
+  - In-range percentage
+  - High/low readings percentage
+- Time range selection (1W, 2W, 1M, 3M, 6M, 1Y)
+- HealthKit integration for iOS
+  - Import blood glucose data from HealthKit
+  - Export readings to HealthKit
+  - Automatic sync with HealthKit
+- Customizable target ranges
+- Detailed statistics and insights
+
 ## Recent Updates
 
 ### Added Features
