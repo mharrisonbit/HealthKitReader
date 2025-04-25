@@ -11,6 +11,7 @@ import {
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
+import {SettingsService} from '../services/settingsService';
 import {format} from 'date-fns';
 
 type RootStackParamList = {
@@ -24,6 +25,7 @@ type RootStackParamList = {
 type Props = NativeStackScreenProps<RootStackParamList, 'List'>;
 
 const databaseService = DatabaseService.getInstance();
+const settingsService = SettingsService.getInstance();
 
 export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
@@ -33,6 +35,7 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   );
   const [showHealthKitModal, setShowHealthKitModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ranges, setRanges] = useState({low: 70, high: 180});
 
   const getUniqueDays = (readings: BloodGlucose[]) => {
     const uniqueDates = new Set(
@@ -41,6 +44,22 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
       ),
     );
     return uniqueDates.size;
+  };
+
+  const loadRanges = async () => {
+    try {
+      const savedRanges = await settingsService.getRanges();
+      setRanges({
+        low: savedRanges.useCustomRanges
+          ? savedRanges.customLow ?? savedRanges.low
+          : savedRanges.low,
+        high: savedRanges.useCustomRanges
+          ? savedRanges.customHigh ?? savedRanges.high
+          : savedRanges.high,
+      });
+    } catch (error) {
+      console.error('Error loading ranges:', error);
+    }
   };
 
   const loadReadings = async () => {
@@ -60,10 +79,29 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadReadings();
+      loadRanges();
     });
 
     return unsubscribe;
   }, [navigation]);
+
+  const getReadingStatus = (value: number): 'low' | 'normal' | 'high' => {
+    if (value < ranges.low) return 'low';
+    if (value > ranges.high) return 'high';
+    return 'normal';
+  };
+
+  const getReadingColor = (value: number): string => {
+    const status = getReadingStatus(value);
+    switch (status) {
+      case 'low':
+        return '#007AFF'; // Blue for low
+      case 'high':
+        return '#FF3B30'; // Red for high
+      default:
+        return '#4CAF50'; // Green for normal
+    }
+  };
 
   const handleReadingPress = (reading: BloodGlucose) => {
     setSelectedReading(reading);
@@ -124,10 +162,19 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
           keyExtractor={item => item.id.toString()}
           renderItem={({item}) => (
             <TouchableOpacity
-              style={styles.readingItem}
+              style={[
+                styles.readingItem,
+                {borderLeftColor: getReadingColor(item.value)},
+              ]}
               onPress={() => handleReadingPress(item)}>
               <View style={styles.readingInfo}>
-                <Text style={styles.readingValue}>{item.value} mg/dL</Text>
+                <Text
+                  style={[
+                    styles.readingValue,
+                    {color: getReadingColor(item.value)},
+                  ]}>
+                  {item.value} mg/dL
+                </Text>
                 <View style={styles.readingDetails}>
                   <Text style={styles.readingDate}>
                     {format(new Date(item.timestamp), 'MMM d, yyyy h:mm a')}
@@ -152,7 +199,11 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
               <>
                 <View style={styles.modalRow}>
                   <Text style={styles.modalLabel}>Value:</Text>
-                  <Text style={styles.modalValue}>
+                  <Text
+                    style={[
+                      styles.modalValue,
+                      {color: getReadingColor(selectedReading.value)},
+                    ]}>
                     {selectedReading.value} mg/dL
                   </Text>
                 </View>
@@ -238,6 +289,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 8,
     marginBottom: 8,
+    marginHorizontal: 16,
+    borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -253,7 +306,6 @@ const styles = StyleSheet.create({
   readingValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
   },
   readingDetails: {
     flexDirection: 'row',
