@@ -17,6 +17,7 @@ const DEFAULT_RANGES: BloodGlucoseRanges = {
 const STORAGE_KEY = '@blood_glucose_ranges';
 const HEALTHKIT_ENABLED_KEY = '@healthkit_enabled';
 const TIME_RANGE_KEY = '@time_range';
+const LAST_SYNC_KEY = '@last_healthkit_sync';
 
 export class SettingsService {
   private static instance: SettingsService;
@@ -74,6 +75,7 @@ export class SettingsService {
     };
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(this.ranges));
+      this.notifySubscribers();
     } catch (error) {
       console.error('Error saving settings:', error);
     }
@@ -82,6 +84,8 @@ export class SettingsService {
   async setRanges(newRanges: BloodGlucoseRanges): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newRanges));
+      this.ranges = newRanges;
+      this.notifySubscribers();
     } catch (error) {
       console.error('Error saving ranges:', error);
       throw error;
@@ -144,22 +148,41 @@ export class SettingsService {
     }
   }
 
-  subscribeToRanges(callback: (ranges: BloodGlucoseRanges) => void): {
-    remove: () => void;
-  } {
-    const subscription = {
-      remove: () => {
-        // Remove the subscription if needed
-      },
-    };
-
-    // Add the callback to a list of subscribers
+  subscribe(callback: (ranges: BloodGlucoseRanges) => void): () => void {
     this.subscribers.push(callback);
-
-    return subscription;
+    return () => {
+      this.subscribers = this.subscribers.filter(sub => sub !== callback);
+    };
   }
 
-  private notifySubscribers(ranges: BloodGlucoseRanges) {
-    this.subscribers.forEach(callback => callback(ranges));
+  private notifySubscribers() {
+    this.subscribers.forEach(callback => callback(this.ranges));
+  }
+
+  async getLastSyncTime(): Promise<Date | null> {
+    try {
+      const lastSync = await AsyncStorage.getItem(LAST_SYNC_KEY);
+      return lastSync ? new Date(lastSync) : null;
+    } catch (error) {
+      console.error('Error getting last sync time:', error);
+      return null;
+    }
+  }
+
+  async updateLastSyncTime(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
+    } catch (error) {
+      console.error('Error updating last sync time:', error);
+    }
+  }
+
+  async shouldSyncWithHealthKit(): Promise<boolean> {
+    const lastSync = await this.getLastSyncTime();
+    if (!lastSync) return true;
+
+    const twelveHoursAgo = new Date();
+    twelveHoursAgo.setHours(twelveHoursAgo.getHours() - 12);
+    return lastSync < twelveHoursAgo;
   }
 }

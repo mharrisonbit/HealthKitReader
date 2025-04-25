@@ -11,6 +11,7 @@ import {LineChart} from 'react-native-chart-kit';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {format} from 'date-fns';
+import {useNavigation} from '@react-navigation/native';
 
 const databaseService = DatabaseService.getInstance();
 const screenWidth = Dimensions.get('window').width;
@@ -27,6 +28,7 @@ export const BloodGlucoseChartScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState(6); // Default to 6 hours
   const [isLoading, setIsLoading] = useState(true);
+  const navigation = useNavigation();
 
   const loadReadings = async () => {
     try {
@@ -48,6 +50,14 @@ export const BloodGlucoseChartScreen: React.FC = () => {
     loadReadings();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadReadings();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
   const getFilteredReadings = () => {
     const now = new Date();
     const startTime = new Date(
@@ -56,6 +66,17 @@ export const BloodGlucoseChartScreen: React.FC = () => {
     return readings
       .filter(reading => reading.timestamp >= startTime)
       .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  };
+
+  const getTimeRangeLabel = () => {
+    const now = new Date();
+    const startTime = new Date(
+      now.getTime() - selectedTimeRange * 60 * 60 * 1000,
+    );
+    return `${format(startTime, 'MMM d, h:mm a')} - ${format(
+      now,
+      'MMM d, h:mm a',
+    )}`;
   };
 
   const formatTime = (date: Date) => {
@@ -91,6 +112,13 @@ export const BloodGlucoseChartScreen: React.FC = () => {
     );
   }
 
+  // Calculate min and max values for the chart
+  const values = filteredReadings.map(reading => reading.value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = maxValue - minValue;
+  const padding = range * 0.1;
+
   const chartData = {
     labels:
       filteredReadings.length > 0
@@ -125,6 +153,9 @@ export const BloodGlucoseChartScreen: React.FC = () => {
       strokeWidth: '2',
       stroke: '#007AFF',
     },
+    fromZero: false,
+    minValue: Math.max(0, minValue - padding),
+    maxValue: maxValue + padding,
   };
 
   return (
@@ -150,26 +181,40 @@ export const BloodGlucoseChartScreen: React.FC = () => {
         ))}
       </View>
 
+      <View style={styles.timeRangeLabelContainer}>
+        <Text style={styles.timeRangeLabel}>{getTimeRangeLabel()}</Text>
+      </View>
+
       <View style={styles.chartContainer}>
-        <LineChart
-          data={chartData}
-          width={screenWidth - 20}
-          height={300}
-          chartConfig={chartConfig}
-          bezier
-          style={styles.chart}
-          yAxisLabel=""
-          yAxisSuffix={` ${readings[0]?.unit || ''}`}
-          withInnerLines={true}
-          withOuterLines={true}
-          withVerticalLines={true}
-          withHorizontalLines={true}
-          withDots={true}
-          withVerticalLabels={true}
-          withHorizontalLabels={true}
-          segments={5}
-          fromZero={false}
-        />
+        {filteredReadings.length > 0 ? (
+          <LineChart
+            data={chartData}
+            width={screenWidth - 20}
+            height={300}
+            chartConfig={chartConfig}
+            bezier
+            style={styles.chart}
+            yAxisLabel=""
+            yAxisSuffix={` ${readings[0]?.unit || ''}`}
+            withInnerLines={true}
+            withOuterLines={true}
+            withVerticalLines={true}
+            withHorizontalLines={true}
+            withDots={true}
+            withVerticalLabels={true}
+            withHorizontalLabels={true}
+            segments={5}
+          />
+        ) : (
+          <View style={styles.emptyChartContainer}>
+            <Text style={styles.emptyChartText}>
+              No readings available for this time range
+            </Text>
+            <Text style={styles.emptyChartSubtext}>
+              Try selecting a different time range
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.statsContainer}>
@@ -316,5 +361,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginTop: 10,
+  },
+  timeRangeLabelContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  timeRangeLabel: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+  },
+  emptyChartContainer: {
+    width: screenWidth - 20,
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 16,
+    padding: 20,
+  },
+  emptyChartText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptyChartSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
 });

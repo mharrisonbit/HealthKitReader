@@ -1,5 +1,75 @@
 # Release Notes
 
+## [Unreleased]
+
+### Added
+
+- Enhanced HealthKit integration with improved data synchronization
+- Grid view layout for statistics display
+- Time range selection for viewing historical data
+- Detailed statistics including A1C estimation and range percentages
+
+### Changed
+
+- Optimized font sizes in grid view for better readability
+- Improved sorting of HealthKit imported readings
+- Enhanced display of current reading from HealthKit
+- Refined statistics calculation based on selected time range
+
+### Fixed
+
+- Current reading now properly displays the most recent HealthKit reading
+- Grid layout spacing and text overflow issues
+- HealthKit data import and synchronization reliability
+
+## [1.0.0] - Initial Release
+
+### Added
+
+- Basic blood glucose tracking functionality
+- HealthKit integration for iOS
+- Manual entry of blood glucose readings
+- Basic statistics and metrics
+- Customizable target ranges
+
+## Version 1.2.0
+
+### New Features
+
+- **Enhanced Data Synchronization**
+  - Added automatic sync check every 12 hours
+  - Implemented user prompts for syncing with HealthKit
+  - Enhanced sync feedback and error handling
+  - Improved sync status tracking
+
+### Performance Improvements
+
+- **Home Screen Optimizations**
+
+  - Fixed infinite loop issues in data processing
+  - Removed redundant calculations
+  - Enhanced metric calculations to respect selected time range
+  - Improved error handling for calculations
+
+- **Chart View Enhancements**
+  - Improved filtering of readings based on selected time range
+  - Optimized chart rendering performance
+  - Enhanced data consistency when switching time ranges
+
+### Bug Fixes
+
+- Fixed infinite loop in HomeScreen calculations
+- Corrected metric calculations to properly respect time ranges
+- Improved error handling in sync process
+- Fixed chart display issues with time range changes
+
+### Technical Changes
+
+- Implemented proper subscription system for range updates
+- Enhanced error handling throughout the application
+- Optimized data processing and calculations
+- Improved state management in HomeScreen
+
 ## Version 1.1.0
 
 ### Breaking Changes
@@ -40,43 +110,6 @@
 - Optimized database queries for better performance
 - Improved error handling in data retrieval
 
-## Version 1.0.0
-
-- Initial release of the Blood Glucose Tracker app
-- Basic functionality for tracking and managing blood glucose readings
-- Integration with Apple HealthKit
-- Local storage using SQLite
-- Basic chart visualization
-- Manual entry of readings
-- Settings for glucose ranges
-
-## Version 0.9.0 (Beta)
-
-### Features Added
-
-- Basic blood glucose tracking functionality
-- Initial HealthKit integration
-- Simple chart visualization
-- Local data storage implementation
-- Basic settings management
-
-### Improvements
-
-- Enhanced data synchronization
-- Improved error handling
-- Better user feedback
-- Optimized performance
-
-## Version 0.8.0 (Alpha)
-
-### Initial Development
-
-- Project setup
-- Basic UI implementation
-- Core functionality development
-- HealthKit integration groundwork
-- Database structure implementation
-
 ## Installation Instructions
 
 ### iOS
@@ -85,18 +118,6 @@
 2. Open the app
 3. Grant HealthKit permissions when prompted
 4. Start tracking your blood glucose readings
-
-### Android
-
-_Note: Android version is currently in development and not available for release._
-
-## Upgrade Notes
-
-### From Beta to 1.0.0
-
-- No data migration required
-- All existing data will be preserved
-- New features will be available immediately after update
 
 ## Support
 

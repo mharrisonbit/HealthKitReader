@@ -11,6 +11,7 @@ import {
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
+import {SettingsService} from '../services/settingsService';
 import {format} from 'date-fns';
 
 type RootStackParamList = {
@@ -24,23 +25,36 @@ type RootStackParamList = {
 type Props = NativeStackScreenProps<RootStackParamList, 'List'>;
 
 const databaseService = DatabaseService.getInstance();
+const settingsService = SettingsService.getInstance();
+
+type FilterType = 'all' | 'low' | 'normal' | 'high';
 
 export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
+  const [filteredReadings, setFilteredReadings] = useState<BloodGlucose[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReading, setSelectedReading] = useState<BloodGlucose | null>(
     null,
   );
   const [showHealthKitModal, setShowHealthKitModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ranges, setRanges] = useState({low: 70, high: 180});
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
-  const getUniqueDays = (readings: BloodGlucose[]) => {
-    const uniqueDates = new Set(
-      readings.map(reading =>
-        format(new Date(reading.timestamp), 'yyyy-MM-dd'),
-      ),
-    );
-    return uniqueDates.size;
+  const loadRanges = async () => {
+    try {
+      const savedRanges = await settingsService.getRanges();
+      setRanges({
+        low: savedRanges.useCustomRanges
+          ? savedRanges.customLow ?? savedRanges.low
+          : savedRanges.low,
+        high: savedRanges.useCustomRanges
+          ? savedRanges.customHigh ?? savedRanges.high
+          : savedRanges.high,
+      });
+    } catch (error) {
+      console.error('Error loading ranges:', error);
+    }
   };
 
   const loadReadings = async () => {
@@ -49,6 +63,7 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
       setError(null);
       const savedReadings = await databaseService.getAllReadings();
       setReadings(savedReadings);
+      setFilteredReadings(savedReadings);
     } catch (error) {
       console.error('Error loading readings:', error);
       setError('Failed to load readings. Please try again.');
@@ -58,12 +73,70 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   };
 
   useEffect(() => {
+    const initialize = async () => {
+      try {
+        setIsLoading(true);
+        await loadRanges();
+        await loadReadings();
+      } catch (error) {
+        console.error('Error during initialization:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initialize();
+  }, []);
+
+  // Subscribe to navigation focus
+  useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadReadings();
+      if (!isLoading) {
+        loadReadings();
+      }
     });
 
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, isLoading]);
+
+  // Subscribe to range changes
+  useEffect(() => {
+    const unsubscribe = settingsService.subscribe(newRanges => {
+      setRanges(newRanges);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const getReadingStatus = (value: number): 'low' | 'normal' | 'high' => {
+    if (value < ranges.low) return 'low';
+    if (value > ranges.high) return 'high';
+    return 'normal';
+  };
+
+  const getReadingColor = (value: number): string => {
+    const status = getReadingStatus(value);
+    switch (status) {
+      case 'low':
+        return '#007AFF'; // Blue for low
+      case 'high':
+        return '#FF3B30'; // Red for high
+      default:
+        return '#4CAF50'; // Green for normal
+    }
+  };
+
+  const handleFilterChange = (filter: FilterType) => {
+    setActiveFilter(filter);
+    if (filter === 'all') {
+      setFilteredReadings(readings);
+    } else {
+      const filtered = readings.filter(reading => {
+        const status = getReadingStatus(reading.value);
+        return status === filter;
+      });
+      setFilteredReadings(filtered);
+    }
+  };
 
   const handleReadingPress = (reading: BloodGlucose) => {
     setSelectedReading(reading);
@@ -94,40 +167,96 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Blood Glucose History</Text>
-        {!isLoading && readings.length > 0 && (
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Total Readings</Text>
-              <Text style={styles.summaryValue}>{readings.length}</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Days Recorded</Text>
-              <Text style={styles.summaryValue}>{getUniqueDays(readings)}</Text>
-            </View>
-          </View>
-        )}
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'all' && styles.filterButtonActive,
+          ]}
+          onPress={() => handleFilterChange('all')}>
+          <Text
+            style={[
+              styles.filterButtonText,
+              activeFilter === 'all' && styles.filterButtonTextActive,
+            ]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'low' && styles.filterButtonActive,
+          ]}
+          onPress={() => handleFilterChange('low')}>
+          <Text
+            style={[
+              styles.filterButtonText,
+              activeFilter === 'low' && styles.filterButtonTextActive,
+            ]}>
+            Low
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'normal' && styles.filterButtonActive,
+          ]}
+          onPress={() => handleFilterChange('normal')}>
+          <Text
+            style={[
+              styles.filterButtonText,
+              activeFilter === 'normal' && styles.filterButtonTextActive,
+            ]}>
+            In Range
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'high' && styles.filterButtonActive,
+          ]}
+          onPress={() => handleFilterChange('high')}>
+          <Text
+            style={[
+              styles.filterButtonText,
+              activeFilter === 'high' && styles.filterButtonTextActive,
+            ]}>
+            High
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#5856D6" />
         </View>
-      ) : readings.length === 0 ? (
+      ) : filteredReadings.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No readings found</Text>
+          <Text style={styles.emptyText}>
+            {activeFilter === 'all'
+              ? 'No readings found'
+              : `No ${activeFilter} readings found`}
+          </Text>
         </View>
       ) : (
         <FlatList
-          data={readings}
+          data={filteredReadings}
           keyExtractor={item => item.id.toString()}
           renderItem={({item}) => (
             <TouchableOpacity
-              style={styles.readingItem}
+              style={[
+                styles.readingItem,
+                {borderLeftColor: getReadingColor(item.value)},
+              ]}
               onPress={() => handleReadingPress(item)}>
               <View style={styles.readingInfo}>
-                <Text style={styles.readingValue}>{item.value} mg/dL</Text>
+                <Text
+                  style={[
+                    styles.readingValue,
+                    {color: getReadingColor(item.value)},
+                  ]}>
+                  {item.value} mg/dL
+                </Text>
                 <View style={styles.readingDetails}>
                   <Text style={styles.readingDate}>
                     {format(new Date(item.timestamp), 'MMM d, yyyy h:mm a')}
@@ -152,7 +281,11 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
               <>
                 <View style={styles.modalRow}>
                   <Text style={styles.modalLabel}>Value:</Text>
-                  <Text style={styles.modalValue}>
+                  <Text
+                    style={[
+                      styles.modalValue,
+                      {color: getReadingColor(selectedReading.value)},
+                    ]}>
                     {selectedReading.value} mg/dL
                   </Text>
                 </View>
@@ -238,6 +371,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 8,
     marginBottom: 8,
+    marginHorizontal: 16,
+    borderLeftWidth: 4,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -253,7 +388,6 @@ const styles = StyleSheet.create({
   readingValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
   },
   readingDetails: {
     flexDirection: 'row',
@@ -365,5 +499,27 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 10,
+    backgroundColor: '#f5f5f5',
+  },
+  filterButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+  },
+  filterButtonActive: {
+    backgroundColor: '#007AFF',
+  },
+  filterButtonText: {
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  filterButtonTextActive: {
+    color: '#fff',
   },
 });
