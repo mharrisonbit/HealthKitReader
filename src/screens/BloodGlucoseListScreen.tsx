@@ -41,15 +41,6 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   const [ranges, setRanges] = useState({low: 70, high: 180});
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
-  const getUniqueDays = (readings: BloodGlucose[]) => {
-    const uniqueDates = new Set(
-      readings.map(reading =>
-        format(new Date(reading.timestamp), 'yyyy-MM-dd'),
-      ),
-    );
-    return uniqueDates.size;
-  };
-
   const loadRanges = async () => {
     try {
       const savedRanges = await settingsService.getRanges();
@@ -176,78 +167,63 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Blood Glucose History</Text>
-        {!isLoading && readings.length > 0 && (
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Total Readings</Text>
-              <Text style={styles.summaryValue}>{readings.length}</Text>
-            </View>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Days Recorded</Text>
-              <Text style={styles.summaryValue}>{getUniqueDays(readings)}</Text>
-            </View>
-          </View>
-        )}
-        <View style={styles.filterContainer}>
-          <TouchableOpacity
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'all' && styles.filterButtonActive,
+          ]}
+          onPress={() => handleFilterChange('all')}>
+          <Text
             style={[
-              styles.filterButton,
-              activeFilter === 'all' && styles.filterButtonActive,
-            ]}
-            onPress={() => handleFilterChange('all')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                activeFilter === 'all' && styles.filterButtonTextActive,
-              ]}>
-              All
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+              styles.filterButtonText,
+              activeFilter === 'all' && styles.filterButtonTextActive,
+            ]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'low' && styles.filterButtonActive,
+          ]}
+          onPress={() => handleFilterChange('low')}>
+          <Text
             style={[
-              styles.filterButton,
-              activeFilter === 'low' && styles.filterButtonActive,
-            ]}
-            onPress={() => handleFilterChange('low')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                activeFilter === 'low' && styles.filterButtonTextActive,
-              ]}>
-              Low
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+              styles.filterButtonText,
+              activeFilter === 'low' && styles.filterButtonTextActive,
+            ]}>
+            Low
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'normal' && styles.filterButtonActive,
+          ]}
+          onPress={() => handleFilterChange('normal')}>
+          <Text
             style={[
-              styles.filterButton,
-              activeFilter === 'normal' && styles.filterButtonActive,
-            ]}
-            onPress={() => handleFilterChange('normal')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                activeFilter === 'normal' && styles.filterButtonTextActive,
-              ]}>
-              In Range
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+              styles.filterButtonText,
+              activeFilter === 'normal' && styles.filterButtonTextActive,
+            ]}>
+            In Range
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.filterButton,
+            activeFilter === 'high' && styles.filterButtonActive,
+          ]}
+          onPress={() => handleFilterChange('high')}>
+          <Text
             style={[
-              styles.filterButton,
-              activeFilter === 'high' && styles.filterButtonActive,
-            ]}
-            onPress={() => handleFilterChange('high')}>
-            <Text
-              style={[
-                styles.filterButtonText,
-                activeFilter === 'high' && styles.filterButtonTextActive,
-              ]}>
-              High
-            </Text>
-          </TouchableOpacity>
-        </View>
+              styles.filterButtonText,
+              activeFilter === 'high' && styles.filterButtonTextActive,
+            ]}>
+            High
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {isLoading ? (
@@ -526,25 +502,21 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 4,
+    justifyContent: 'space-around',
+    padding: 10,
+    backgroundColor: '#f5f5f5',
   },
   filterButton: {
-    flex: 1,
+    paddingHorizontal: 15,
     paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: 6,
-    alignItems: 'center',
+    borderRadius: 20,
+    backgroundColor: '#fff',
   },
   filterButtonActive: {
-    backgroundColor: '#5856D6',
+    backgroundColor: '#007AFF',
   },
   filterButtonText: {
-    fontSize: 14,
-    color: '#666',
+    color: '#007AFF',
     fontWeight: '500',
   },
   filterButtonTextActive: {

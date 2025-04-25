@@ -38,7 +38,7 @@ export type RootStackParamList = {
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator<RootStackParamList>();
-const databaseService = new DatabaseService();
+const databaseService = DatabaseService.getInstance();
 
 // Create stack navigators for each tab
 const HomeStack = () => (

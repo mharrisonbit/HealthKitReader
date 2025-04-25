@@ -284,10 +284,6 @@ export const HomeScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Blood Glucose Tracker</Text>
-      </View>
-
       <ScrollView style={styles.content}>
         <View style={styles.timeRangeContainer}>
           {TIME_RANGES.map(range => (
@@ -392,16 +388,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  header: {
-    padding: 16,
-    backgroundColor: '#5856D6',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
   },
   content: {
     flex: 1,
