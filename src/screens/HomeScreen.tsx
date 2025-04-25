@@ -39,6 +39,7 @@ export const HomeScreen: React.FC = () => {
     inRangePercentage: null as number | null,
     highPercentage: null as number | null,
     lowPercentage: null as number | null,
+    averageGlucose: null as number | null,
   });
   const [selectedTimeRange, setSelectedTimeRange] = useState<number>(90); // Default to 3 months
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -56,6 +57,7 @@ export const HomeScreen: React.FC = () => {
           inRangePercentage: null,
           highPercentage: null,
           lowPercentage: null,
+          averageGlucose: null,
         });
         return;
       }
@@ -79,6 +81,7 @@ export const HomeScreen: React.FC = () => {
             inRangePercentage: null,
             highPercentage: null,
             lowPercentage: null,
+            averageGlucose: null,
           });
           return;
         }
@@ -113,6 +116,7 @@ export const HomeScreen: React.FC = () => {
           inRangePercentage: (inRangeCount / total) * 100,
           highPercentage: (highCount / total) * 100,
           lowPercentage: (lowCount / total) * 100,
+          averageGlucose: Number(averageGlucose.toFixed(1)),
         });
       } catch (error) {
         console.error('Error calculating metrics:', error);
@@ -122,6 +126,7 @@ export const HomeScreen: React.FC = () => {
           inRangePercentage: null,
           highPercentage: null,
           lowPercentage: null,
+          averageGlucose: null,
         });
       }
     },
@@ -133,18 +138,27 @@ export const HomeScreen: React.FC = () => {
       setIsLoading(true);
       const now = new Date();
       const startDate = subDays(now, selectedTimeRange);
-      const loadedReadings = await databaseService.getReadingsByDateRange(
+
+      // Get all readings and sort by timestamp in descending order
+      const allReadings = await databaseService.getAllReadings();
+      const sortedReadings = allReadings.sort(
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+      );
+      setReadings(sortedReadings);
+
+      // Get readings for the selected time range for metrics
+      const timeRangeReadings = await databaseService.getReadingsByDateRange(
         startDate,
         now,
       );
-      setReadings(loadedReadings);
+      calculateMetrics(timeRangeReadings, ranges);
     } catch (error) {
       console.error('Error loading readings:', error);
       Alert.alert('Error', 'Failed to load readings');
     } finally {
       setIsLoading(false);
     }
-  }, [selectedTimeRange]);
+  }, [selectedTimeRange, ranges, calculateMetrics]);
 
   const loadRanges = useCallback(async () => {
     try {
@@ -421,6 +435,14 @@ export const HomeScreen: React.FC = () => {
                       ? `${readings[0].value} mg/dL`
                       : 'No readings'}
                   </Text>
+                  {readings.length > 0 && (
+                    <Text style={styles.timestampText}>
+                      {new Date(readings[0].timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={[styles.statCard, {width: '48%'}]}>
@@ -433,8 +455,8 @@ export const HomeScreen: React.FC = () => {
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.statValue}>
-                    {readings.length > 0
-                      ? `${readings[0].value} mg/dL`
+                    {metrics.averageGlucose !== null
+                      ? `${metrics.averageGlucose} mg/dL`
                       : 'No readings'}
                   </Text>
                 </View>
@@ -540,6 +562,14 @@ export const HomeScreen: React.FC = () => {
                     ? `${readings[0].value} mg/dL`
                     : 'No readings'}
                 </Text>
+                {readings.length > 0 && (
+                  <Text style={styles.timestampText}>
+                    {new Date(readings[0].timestamp).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                )}
               </View>
 
               <View style={[styles.statCard, {width: '100%'}]}>
@@ -552,8 +582,8 @@ export const HomeScreen: React.FC = () => {
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.statValue}>
-                  {readings.length > 0
-                    ? `${readings[0].value} mg/dL`
+                  {metrics.averageGlucose !== null
+                    ? `${metrics.averageGlucose} mg/dL`
                     : 'No readings'}
                 </Text>
               </View>
@@ -730,21 +760,21 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   statLabel: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#666',
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#007AFF',
   },
   a1cStatus: {
-    fontSize: 14,
+    fontSize: 12,
     marginTop: 4,
   },
   rangeText: {
-    fontSize: 12,
+    fontSize: 10,
     color: '#666',
     marginTop: 4,
   },
@@ -801,5 +831,10 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  timestampText: {
+    fontSize: 10,
+    color: '#666',
+    marginTop: 4,
   },
 });
