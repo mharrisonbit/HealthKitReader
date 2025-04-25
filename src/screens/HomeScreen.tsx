@@ -311,72 +311,76 @@ export const HomeScreen: React.FC = () => {
         </View>
 
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Estimated A1C</Text>
-            <Text style={styles.statValue}>
-              {metrics.a1cValue
-                ? `${metrics.a1cValue.toFixed(1)}%`
-                : 'No readings'}
-            </Text>
-            {metrics.a1cStatus && (
-              <Text
-                style={[
-                  styles.a1cStatus,
-                  {color: getA1CColor(metrics.a1cStatus)},
-                ]}>
-                {metrics.a1cStatus}
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Estimated A1C</Text>
+              <Text style={styles.statValue}>
+                {metrics.a1cValue
+                  ? `${metrics.a1cValue.toFixed(1)}%`
+                  : 'No readings'}
               </Text>
-            )}
+              {metrics.a1cStatus && (
+                <Text
+                  style={[
+                    styles.a1cStatus,
+                    {color: getA1CColor(metrics.a1cStatus)},
+                  ]}>
+                  {metrics.a1cStatus}
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Current</Text>
+              <Text style={styles.statValue}>
+                {readings.length > 0
+                  ? `${readings[0].value} mg/dL`
+                  : 'No readings'}
+              </Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Average</Text>
+              <Text style={styles.statValue}>
+                {readings.length > 0
+                  ? `${readings[0].value} mg/dL`
+                  : 'No readings'}
+              </Text>
+            </View>
+
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>In Range</Text>
+              <Text style={styles.statValue}>
+                {metrics.inRangePercentage !== null
+                  ? `${metrics.inRangePercentage.toFixed(1)}%`
+                  : 'No readings'}
+              </Text>
+              <Text style={styles.rangeText}>
+                ({ranges.low} - {ranges.high} mg/dL)
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Current</Text>
-            <Text style={styles.statValue}>
-              {readings.length > 0
-                ? `${readings[0].value} mg/dL`
-                : 'No readings'}
-            </Text>
-          </View>
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>High</Text>
+              <Text style={[styles.statValue, styles.highValue]}>
+                {metrics.highPercentage !== null
+                  ? `${metrics.highPercentage.toFixed(1)}%`
+                  : 'No readings'}
+              </Text>
+              <Text style={styles.rangeText}>(Above {ranges.high} mg/dL)</Text>
+            </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Average</Text>
-            <Text style={styles.statValue}>
-              {readings.length > 0
-                ? `${readings[0].value} mg/dL`
-                : 'No readings'}
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>In Range</Text>
-            <Text style={styles.statValue}>
-              {metrics.inRangePercentage !== null
-                ? `${metrics.inRangePercentage.toFixed(1)}%`
-                : 'No readings'}
-            </Text>
-            <Text style={styles.rangeText}>
-              ({ranges.low} - {ranges.high} mg/dL)
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>High</Text>
-            <Text style={[styles.statValue, styles.highValue]}>
-              {metrics.highPercentage !== null
-                ? `${metrics.highPercentage.toFixed(1)}%`
-                : 'No readings'}
-            </Text>
-            <Text style={styles.rangeText}>(Above {ranges.high} mg/dL)</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Low</Text>
-            <Text style={[styles.statValue, styles.lowValue]}>
-              {metrics.lowPercentage !== null
-                ? `${metrics.lowPercentage.toFixed(1)}%`
-                : 'No readings'}
-            </Text>
-            <Text style={styles.rangeText}>(Below {ranges.low} mg/dL)</Text>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Low</Text>
+              <Text style={[styles.statValue, styles.lowValue]}>
+                {metrics.lowPercentage !== null
+                  ? `${metrics.lowPercentage.toFixed(1)}%`
+                  : 'No readings'}
+              </Text>
+              <Text style={styles.rangeText}>(Below {ranges.low} mg/dL)</Text>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -421,6 +425,16 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   statCard: {
     backgroundColor: '#fff',
     padding: 16,
@@ -434,6 +448,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    width: '48%',
   },
   statLabel: {
     fontSize: 16,
