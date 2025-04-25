@@ -7,12 +7,14 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  Modal,
 } from 'react-native';
 import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {SettingsService} from '../services/settingsService';
 import {subDays, subMonths} from 'date-fns';
 import {HealthService} from '../services/healthService';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const databaseService = DatabaseService.getInstance();
 const settingsService = SettingsService.getInstance();
@@ -40,6 +42,7 @@ export const HomeScreen: React.FC = () => {
   });
   const [selectedTimeRange, setSelectedTimeRange] = useState<number>(90); // Default to 3 months
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedInfo, setSelectedInfo] = useState<string | null>(null);
 
   const calculateMetrics = useCallback(
     (
@@ -275,6 +278,39 @@ export const HomeScreen: React.FC = () => {
     return '#4CAF50'; // Green for normal
   };
 
+  const infoExplanations = {
+    a1c: {
+      title: 'Estimated A1C',
+      description:
+        "A1C is a measure of your average blood glucose levels over the past 2-3 months. It's shown as a percentage. The higher the percentage, the higher your blood glucose levels have been.",
+    },
+    current: {
+      title: 'Current Reading',
+      description:
+        'Your most recent blood glucose reading. This shows your current blood sugar level in mg/dL.',
+    },
+    average: {
+      title: 'Average Reading',
+      description:
+        'The average of all your blood glucose readings within the selected time period.',
+    },
+    inRange: {
+      title: 'In Range',
+      description:
+        "The percentage of your readings that fall within your target range. This helps you understand how well you're managing your blood glucose levels.",
+    },
+    high: {
+      title: 'High Readings',
+      description:
+        'The percentage of your readings that are above your target range. Consistently high readings may indicate the need for adjustments to your management plan.',
+    },
+    low: {
+      title: 'Low Readings',
+      description:
+        'The percentage of your readings that are below your target range. Low readings can be dangerous and should be addressed immediately.',
+    },
+  };
+
   if (isLoading) {
     return (
       <View style={styles.container}>
@@ -347,7 +383,14 @@ export const HomeScreen: React.FC = () => {
             <>
               <View style={styles.statsGrid}>
                 <View style={[styles.statCard, {width: '48%'}]}>
-                  <Text style={styles.statLabel}>Estimated A1C</Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.statLabel}>Estimated A1C</Text>
+                    <TouchableOpacity
+                      onPress={() => setSelectedInfo('a1c')}
+                      style={styles.infoButton}>
+                      <Icon name="info-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.statValue}>
                     {metrics.a1cValue
                       ? `${metrics.a1cValue.toFixed(1)}%`
@@ -365,7 +408,14 @@ export const HomeScreen: React.FC = () => {
                 </View>
 
                 <View style={[styles.statCard, {width: '48%'}]}>
-                  <Text style={styles.statLabel}>Current</Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.statLabel}>Current</Text>
+                    <TouchableOpacity
+                      onPress={() => setSelectedInfo('current')}
+                      style={styles.infoButton}>
+                      <Icon name="info-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.statValue}>
                     {readings.length > 0
                       ? `${readings[0].value} mg/dL`
@@ -374,7 +424,14 @@ export const HomeScreen: React.FC = () => {
                 </View>
 
                 <View style={[styles.statCard, {width: '48%'}]}>
-                  <Text style={styles.statLabel}>Average</Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.statLabel}>Average</Text>
+                    <TouchableOpacity
+                      onPress={() => setSelectedInfo('average')}
+                      style={styles.infoButton}>
+                      <Icon name="info-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.statValue}>
                     {readings.length > 0
                       ? `${readings[0].value} mg/dL`
@@ -383,7 +440,14 @@ export const HomeScreen: React.FC = () => {
                 </View>
 
                 <View style={[styles.statCard, {width: '48%'}]}>
-                  <Text style={styles.statLabel}>In Range</Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.statLabel}>In Range</Text>
+                    <TouchableOpacity
+                      onPress={() => setSelectedInfo('inRange')}
+                      style={styles.infoButton}>
+                      <Icon name="info-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.statValue}>
                     {metrics.inRangePercentage !== null
                       ? `${metrics.inRangePercentage.toFixed(1)}%`
@@ -397,7 +461,14 @@ export const HomeScreen: React.FC = () => {
 
               <View style={styles.statsRow}>
                 <View style={[styles.statCard, {width: '48%'}]}>
-                  <Text style={styles.statLabel}>High</Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.statLabel}>High</Text>
+                    <TouchableOpacity
+                      onPress={() => setSelectedInfo('high')}
+                      style={styles.infoButton}>
+                      <Icon name="info-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={[styles.statValue, styles.highValue]}>
                     {metrics.highPercentage !== null
                       ? `${metrics.highPercentage.toFixed(1)}%`
@@ -409,7 +480,14 @@ export const HomeScreen: React.FC = () => {
                 </View>
 
                 <View style={[styles.statCard, {width: '48%'}]}>
-                  <Text style={styles.statLabel}>Low</Text>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.statLabel}>Low</Text>
+                    <TouchableOpacity
+                      onPress={() => setSelectedInfo('low')}
+                      style={styles.infoButton}>
+                      <Icon name="info-outline" size={20} color="#666" />
+                    </TouchableOpacity>
+                  </View>
                   <Text style={[styles.statValue, styles.lowValue]}>
                     {metrics.lowPercentage !== null
                       ? `${metrics.lowPercentage.toFixed(1)}%`
@@ -424,7 +502,14 @@ export const HomeScreen: React.FC = () => {
           ) : (
             <View style={styles.statsList}>
               <View style={[styles.statCard, {width: '100%'}]}>
-                <Text style={styles.statLabel}>Estimated A1C</Text>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.statLabel}>Estimated A1C</Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedInfo('a1c')}
+                    style={styles.infoButton}>
+                    <Icon name="info-outline" size={20} color="#666" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.statValue}>
                   {metrics.a1cValue
                     ? `${metrics.a1cValue.toFixed(1)}%`
@@ -442,7 +527,14 @@ export const HomeScreen: React.FC = () => {
               </View>
 
               <View style={[styles.statCard, {width: '100%'}]}>
-                <Text style={styles.statLabel}>Current</Text>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.statLabel}>Current</Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedInfo('current')}
+                    style={styles.infoButton}>
+                    <Icon name="info-outline" size={20} color="#666" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.statValue}>
                   {readings.length > 0
                     ? `${readings[0].value} mg/dL`
@@ -451,7 +543,14 @@ export const HomeScreen: React.FC = () => {
               </View>
 
               <View style={[styles.statCard, {width: '100%'}]}>
-                <Text style={styles.statLabel}>Average</Text>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.statLabel}>Average</Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedInfo('average')}
+                    style={styles.infoButton}>
+                    <Icon name="info-outline" size={20} color="#666" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.statValue}>
                   {readings.length > 0
                     ? `${readings[0].value} mg/dL`
@@ -460,7 +559,14 @@ export const HomeScreen: React.FC = () => {
               </View>
 
               <View style={[styles.statCard, {width: '100%'}]}>
-                <Text style={styles.statLabel}>In Range</Text>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.statLabel}>In Range</Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedInfo('inRange')}
+                    style={styles.infoButton}>
+                    <Icon name="info-outline" size={20} color="#666" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={styles.statValue}>
                   {metrics.inRangePercentage !== null
                     ? `${metrics.inRangePercentage.toFixed(1)}%`
@@ -472,7 +578,14 @@ export const HomeScreen: React.FC = () => {
               </View>
 
               <View style={[styles.statCard, {width: '100%'}]}>
-                <Text style={styles.statLabel}>High</Text>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.statLabel}>High</Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedInfo('high')}
+                    style={styles.infoButton}>
+                    <Icon name="info-outline" size={20} color="#666" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={[styles.statValue, styles.highValue]}>
                   {metrics.highPercentage !== null
                     ? `${metrics.highPercentage.toFixed(1)}%`
@@ -484,7 +597,14 @@ export const HomeScreen: React.FC = () => {
               </View>
 
               <View style={[styles.statCard, {width: '100%'}]}>
-                <Text style={styles.statLabel}>Low</Text>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.statLabel}>Low</Text>
+                  <TouchableOpacity
+                    onPress={() => setSelectedInfo('low')}
+                    style={styles.infoButton}>
+                    <Icon name="info-outline" size={20} color="#666" />
+                  </TouchableOpacity>
+                </View>
                 <Text style={[styles.statValue, styles.lowValue]}>
                   {metrics.lowPercentage !== null
                     ? `${metrics.lowPercentage.toFixed(1)}%`
@@ -495,6 +615,28 @@ export const HomeScreen: React.FC = () => {
             </View>
           )}
         </View>
+
+        <Modal
+          visible={!!selectedInfo}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setSelectedInfo(null)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {selectedInfo ? infoExplanations[selectedInfo].title : ''}
+              </Text>
+              <Text style={styles.modalText}>
+                {selectedInfo ? infoExplanations[selectedInfo].description : ''}
+              </Text>
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => setSelectedInfo(null)}>
+                <Text style={styles.modalButtonText}>Got it</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </View>
   );
@@ -614,5 +756,50 @@ const styles = StyleSheet.create({
   },
   statsList: {
     flex: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  infoButton: {
+    padding: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#333',
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#666',
+    lineHeight: 24,
+    marginBottom: 20,
+  },
+  modalButton: {
+    backgroundColor: '#5856D6',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
