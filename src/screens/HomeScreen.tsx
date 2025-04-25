@@ -31,26 +31,47 @@ export const HomeScreen: React.FC = () => {
   const [a1cValue, setA1cValue] = useState<number | null>(null);
   const [a1cStatus, setA1cStatus] = useState<string | null>(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState<number>(90); // Default to 3 months
-  const [_ranges, _setRanges] = useState({low: 70, high: 180});
+  const [ranges, setRanges] = useState({low: 70, high: 180});
+  const [inRangePercentage, setInRangePercentage] = useState<number | null>(
+    null,
+  );
+  const [highPercentage, setHighPercentage] = useState<number | null>(null);
+  const [lowPercentage, setLowPercentage] = useState<number | null>(null);
 
   const calculateA1c = useCallback(
     (readings: BloodGlucose[]): number | null => {
       if (readings.length === 0) return null;
 
-      console.log('Calculating A1C for readings count:', readings.length);
+      // Filter readings by selected time range
+      const now = new Date();
+      const startDate =
+        selectedTimeRange <= 31
+          ? subDays(now, selectedTimeRange)
+          : subMonths(now, Math.ceil(selectedTimeRange / 30));
+
+      const filteredReadings = readings.filter(
+        reading => new Date(reading.timestamp) >= startDate,
+      );
+
+      if (filteredReadings.length === 0) return null;
+
+      console.log(
+        'Calculating A1C for readings count:',
+        filteredReadings.length,
+      );
       console.log(
         'Sample of readings:',
-        readings.slice(0, 3).map(r => ({
+        filteredReadings.slice(0, 3).map(r => ({
           value: r.value,
           timestamp: new Date(r.timestamp),
         })),
       );
 
-      const totalGlucose = readings.reduce(
+      const totalGlucose = filteredReadings.reduce(
         (sum, reading) => sum + reading.value,
         0,
       );
-      const averageGlucose = totalGlucose / readings.length;
+      const averageGlucose = totalGlucose / filteredReadings.length;
       console.log('Average glucose:', averageGlucose);
 
       // Convert average glucose to A1c using the formula: A1c = (average glucose + 46.7) / 28.7
@@ -59,52 +80,109 @@ export const HomeScreen: React.FC = () => {
       console.log('Calculated A1C:', roundedA1c);
       return roundedA1c;
     },
-    [],
+    [selectedTimeRange],
   );
 
   const calculateAverageGlucose = useCallback(
     (readings: BloodGlucose[]): number | null => {
       if (readings.length === 0) return null;
 
+      // Filter readings by selected time range
+      const now = new Date();
+      const startDate =
+        selectedTimeRange <= 31
+          ? subDays(now, selectedTimeRange)
+          : subMonths(now, Math.ceil(selectedTimeRange / 30));
+
+      const filteredReadings = readings.filter(
+        reading => new Date(reading.timestamp) >= startDate,
+      );
+
+      if (filteredReadings.length === 0) return null;
+
       console.log(
         'Calculating average glucose for readings count:',
-        readings.length,
+        filteredReadings.length,
       );
       console.log(
         'Sample of readings:',
-        readings.slice(0, 3).map(r => ({
+        filteredReadings.slice(0, 3).map(r => ({
           value: r.value,
           timestamp: new Date(r.timestamp),
         })),
       );
 
-      const totalGlucose = readings.reduce(
+      const totalGlucose = filteredReadings.reduce(
         (sum, reading) => sum + reading.value,
         0,
       );
-      const average = totalGlucose / readings.length;
+      const average = totalGlucose / filteredReadings.length;
       console.log('Average glucose:', average);
       return Number(average.toFixed(1));
     },
-    [],
+    [selectedTimeRange],
   );
 
   const calculateMetrics = useCallback(
     (readings: BloodGlucose[]) => {
       try {
-        console.log('Calculating metrics for readings count:', readings.length);
-        const newA1c = calculateA1c(readings);
+        // Filter readings by selected time range
+        const now = new Date();
+        const startDate =
+          selectedTimeRange <= 31
+            ? subDays(now, selectedTimeRange)
+            : subMonths(now, Math.ceil(selectedTimeRange / 30));
+
+        const filteredReadings = readings.filter(
+          reading => new Date(reading.timestamp) >= startDate,
+        );
+
+        console.log(
+          'Calculating metrics for readings count:',
+          filteredReadings.length,
+        );
+        const newA1c = calculateA1c(filteredReadings);
         console.log('New A1C value:', newA1c);
         setA1cValue(newA1c);
         const a1cString = newA1c !== null ? newA1c.toString() : null;
         setA1cStatus(getA1CStatus(a1cString));
+
+        // Calculate percentages
+        if (filteredReadings.length > 0) {
+          const inRangeCount = filteredReadings.filter(
+            reading =>
+              reading.value >= ranges.low && reading.value <= ranges.high,
+          ).length;
+          const highCount = filteredReadings.filter(
+            reading => reading.value > ranges.high,
+          ).length;
+          const lowCount = filteredReadings.filter(
+            reading => reading.value < ranges.low,
+          ).length;
+
+          const inRangePercentage =
+            (inRangeCount / filteredReadings.length) * 100;
+          const highPercentage = (highCount / filteredReadings.length) * 100;
+          const lowPercentage = (lowCount / filteredReadings.length) * 100;
+
+          setInRangePercentage(inRangePercentage);
+          setHighPercentage(highPercentage);
+          setLowPercentage(lowPercentage);
+        } else {
+          setInRangePercentage(null);
+          setHighPercentage(null);
+          setLowPercentage(null);
+        }
       } catch (error) {
         console.error('Error calculating metrics:', error);
         setA1cValue(null);
         setA1cStatus(null);
+        setInRangePercentage(null);
+        setHighPercentage(null);
+        setLowPercentage(null);
       }
     },
-    [calculateA1c],
+    [calculateA1c, ranges.low, ranges.high, selectedTimeRange],
   );
 
   const loadReadings = useCallback(async () => {
@@ -123,48 +201,44 @@ export const HomeScreen: React.FC = () => {
       );
       console.log('Loaded readings count:', filteredReadings.length);
       setReadings(filteredReadings);
-      calculateMetrics(filteredReadings);
     } catch (error) {
       console.error('Error loading readings:', error);
       Alert.alert('Error', 'Failed to load readings');
     } finally {
       setIsLoading(false);
     }
-  }, [calculateMetrics, selectedTimeRange]);
+  }, [selectedTimeRange]);
+
+  // Calculate metrics whenever readings or ranges change
+  useEffect(() => {
+    if (readings.length > 0) {
+      calculateMetrics(readings);
+    }
+  }, [readings, ranges.low, ranges.high, calculateMetrics]);
 
   useEffect(() => {
     loadReadings();
   }, [loadReadings]);
 
-  // Add new useEffect to recalculate metrics when time range changes
-  useEffect(() => {
-    console.log('Time range changed to:', selectedTimeRange);
-    if (readings.length > 0) {
-      console.log('Recalculating metrics for time range change');
-      calculateMetrics(readings);
-    } else {
-      console.log('No readings available for recalculation');
-    }
-  }, [selectedTimeRange, readings, calculateMetrics]);
-
   useEffect(() => {
     const loadRanges = async () => {
       try {
         const savedRanges = await settingsService.getRanges();
-        _setRanges({
+        const newRanges = {
           low: savedRanges.useCustomRanges
             ? savedRanges.customLow ?? savedRanges.low
             : savedRanges.low,
           high: savedRanges.useCustomRanges
             ? savedRanges.customHigh ?? savedRanges.high
             : savedRanges.high,
-        });
+        };
+        setRanges(newRanges);
       } catch (error) {
         console.error('Error loading ranges:', error);
       }
     };
     loadRanges();
-  }, []);
+  }, []); // Only run once on mount
 
   const getA1CStatus = (a1c: string | null): string => {
     if (a1c === null) return 'N/A';
@@ -228,6 +302,18 @@ export const HomeScreen: React.FC = () => {
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Estimated A1C</Text>
+            <Text style={styles.statValue}>
+              {a1cValue ? `${a1cValue.toFixed(1)}%` : 'No readings'}
+            </Text>
+            {a1cStatus && (
+              <Text style={[styles.a1cStatus, {color: getA1CColor(a1cStatus)}]}>
+                {a1cStatus}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.statCard}>
             <Text style={styles.statLabel}>Current</Text>
             <Text style={styles.statValue}>
               {readings.length > 0
@@ -246,15 +332,35 @@ export const HomeScreen: React.FC = () => {
           </View>
 
           <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Estimated A1C</Text>
+            <Text style={styles.statLabel}>In Range</Text>
             <Text style={styles.statValue}>
-              {a1cValue ? `${a1cValue.toFixed(1)}%` : 'No readings'}
+              {inRangePercentage !== null
+                ? `${inRangePercentage.toFixed(1)}%`
+                : 'No readings'}
             </Text>
-            {a1cStatus && (
-              <Text style={[styles.a1cStatus, {color: getA1CColor(a1cStatus)}]}>
-                {a1cStatus}
-              </Text>
-            )}
+            <Text style={styles.rangeText}>
+              ({ranges.low} - {ranges.high} mg/dL)
+            </Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>High</Text>
+            <Text style={[styles.statValue, styles.highValue]}>
+              {highPercentage !== null
+                ? `${highPercentage.toFixed(1)}%`
+                : 'No readings'}
+            </Text>
+            <Text style={styles.rangeText}>(Above {ranges.high} mg/dL)</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Low</Text>
+            <Text style={[styles.statValue, styles.lowValue]}>
+              {lowPercentage !== null
+                ? `${lowPercentage.toFixed(1)}%`
+                : 'No readings'}
+            </Text>
+            <Text style={styles.rangeText}>(Below {ranges.low} mg/dL)</Text>
           </View>
         </View>
       </ScrollView>
@@ -336,5 +442,16 @@ const styles = StyleSheet.create({
   a1cStatus: {
     fontSize: 14,
     marginTop: 4,
+  },
+  rangeText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  highValue: {
+    color: '#FF3B30', // Red color for high values
+  },
+  lowValue: {
+    color: '#007AFF', // Blue color for low values
   },
 });
