@@ -82,13 +82,39 @@ export const BloodGlucoseListScreen: React.FC<Props> = ({navigation}) => {
   };
 
   useEffect(() => {
+    const initialize = async () => {
+      try {
+        setIsLoading(true);
+        await loadRanges();
+        await loadReadings();
+      } catch (error) {
+        console.error('Error during initialization:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initialize();
+  }, []);
+
+  // Subscribe to navigation focus
+  useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadReadings();
-      loadRanges();
+      if (!isLoading) {
+        loadReadings();
+      }
     });
 
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, isLoading]);
+
+  // Subscribe to range changes
+  useEffect(() => {
+    const unsubscribe = settingsService.subscribe(newRanges => {
+      setRanges(newRanges);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const getReadingStatus = (value: number): 'low' | 'normal' | 'high' => {
     if (value < ranges.low) return 'low';

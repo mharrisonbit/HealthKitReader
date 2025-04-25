@@ -1,16 +1,8 @@
 import {Platform} from 'react-native';
 import GoogleFit, {Scopes} from 'react-native-google-fit';
 import AppleHealthKit from 'react-native-health';
-import {
-  HKHealthStore,
-  HKQuantityType,
-  HKQuantityTypeIdentifier,
-  HKQuantity,
-  HKUnit,
-  HKMetricPrefix,
-  HKQuantitySample,
-} from 'react-native-healthkit';
 import {DatabaseService} from './database';
+import {SettingsService} from './settingsService';
 
 interface GoogleFitBloodGlucose {
   value: number;
@@ -31,6 +23,7 @@ export class HealthService {
   private isHealthKitInitialized: boolean = false;
   private isGoogleFitInitialized: boolean = false;
   private databaseService: DatabaseService;
+  private settingsService: SettingsService;
   private permissions = {
     permissions: {
       read: [AppleHealthKit.Constants.Permissions.BloodGlucose],
@@ -44,7 +37,8 @@ export class HealthService {
     } else if (Platform.OS === 'android') {
       this.googleFit = require('react-native-google-fit').default;
     }
-    this.databaseService = new DatabaseService();
+    this.databaseService = DatabaseService.getInstance();
+    this.settingsService = SettingsService.getInstance();
   }
 
   static getInstance(): HealthService {
@@ -590,6 +584,35 @@ export class HealthService {
     } catch (error) {
       console.error('Error getting oldest blood glucose date:', error);
       return null;
+    }
+  }
+
+  async syncWithHealthKit(): Promise<void> {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+
+    try {
+      // Initialize HealthKit
+      await this.initializeHealthKit();
+
+      // Get the last sync time from settings
+      const lastSync = await this.settingsService.getLastSyncTime();
+      const startDate = lastSync || new Date(2000, 0, 1); // Start from year 2000 if no last sync
+      const endDate = new Date();
+
+      // Import new readings in batches
+      await this.importBloodGlucoseInBatches(startDate, endDate, progress => {
+        console.log(
+          `Importing HealthKit data: ${progress.currentDay}/${progress.totalDays}`,
+        );
+      });
+
+      // Update the last sync time
+      await this.settingsService.updateLastSyncTime();
+    } catch (error) {
+      console.error('Error syncing with HealthKit:', error);
+      throw error;
     }
   }
 }
