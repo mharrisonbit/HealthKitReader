@@ -164,33 +164,39 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
       // Get the last sync time from settings
       const lastSync = await settingsService.getLastSyncTime();
       const endDate = new Date();
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-      // Use the more recent of last sync or one year ago
-      const startDate = lastSync
-        ? lastSync > oneYearAgo
-          ? lastSync
-          : oneYearAgo
-        : oneYearAgo;
+      // If we have a last sync time, use it as the start date
+      // Otherwise, get the oldest available reading date from HealthKit
+      let startDate: Date;
+      if (lastSync) {
+        startDate = lastSync;
+        Logger.log(
+          'Using last sync time as start date:',
+          startDate.toISOString(),
+        );
+      } else {
+        const oldestDate = await healthService.getOldestBloodGlucoseDate();
+        if (oldestDate) {
+          startDate = oldestDate;
+          Logger.log(
+            'Using oldest available reading date:',
+            startDate.toISOString(),
+          );
+        } else {
+          // If no last sync and no oldest date, default to one year ago
+          startDate = new Date();
+          startDate.setFullYear(startDate.getFullYear() - 1);
+          Logger.log(
+            'Using default one year ago as start date:',
+            startDate.toISOString(),
+          );
+        }
+      }
 
       Logger.log('Starting import from HealthKit...');
       Logger.log(
         `Import date range: ${startDate.toISOString()} to ${endDate.toISOString()}`,
       );
-
-      // Get the oldest available reading date from HealthKit
-      const oldestDate = await healthService.getOldestBloodGlucoseDate();
-      if (oldestDate) {
-        Logger.log(
-          `Oldest available reading date: ${oldestDate.toISOString()}`,
-        );
-        // Use the older of the two dates
-        startDate.setTime(Math.min(startDate.getTime(), oldestDate.getTime()));
-        Logger.log(
-          `Adjusted start date: ${startDate.toISOString()} to ${endDate.toISOString()}`,
-        );
-      }
 
       const {healthKit, googleFit} =
         await healthService.getAllBloodGlucoseReadings(startDate, endDate);
