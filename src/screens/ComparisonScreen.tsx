@@ -4,398 +4,457 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import {subDays} from 'date-fns';
+import {BloodGlucose} from '../types/BloodGlucose';
 import {DatabaseService} from '../services/database';
 import {SettingsService} from '../services/settingsService';
-import {BloodGlucose} from '../types/BloodGlucose';
+import {subDays} from 'date-fns';
 import {calculateA1C} from '../utils/a1cCalculator';
-
-const TIME_RANGES = [
-  {label: '7D', value: 7},
-  {label: '14D', value: 14},
-  {label: '30D', value: 30},
-  {label: '90D', value: 90},
-];
+import {getA1CStatus} from '../utils/a1cStatus';
 
 interface Metrics {
-  a1cValue: number | null;
+  average: number | null;
+  min: number | null;
+  max: number | null;
+  inRange: number | null;
+  high: number | null;
+  low: number | null;
+  a1c: string | null;
   a1cStatus: string | null;
-  inRangePercentage: number | null;
-  highPercentage: number | null;
-  lowPercentage: number | null;
-  averageGlucose: number | null;
 }
 
-export const ComparisonScreen: React.FC = (): JSX.Element => {
-  const [firstRange, setFirstRange] = useState(7);
-  const [secondRange, setSecondRange] = useState(14);
+const getA1CColor = (a1c: string | null): string => {
+  if (a1c === null) return '#666666'; // Gray for N/A
+
+  const a1cNum = parseFloat(a1c);
+  if (a1cNum >= 9.0) return '#8B0000'; // Dark red for extremely high
+  if (a1cNum >= 6.5) return '#FF0000'; // Red for diabetic
+  if (a1cNum >= 5.7) return '#FFA500'; // Orange for pre-diabetic
+  return '#4CAF50'; // Green for normal
+};
+
+export const ComparisonScreen: React.FC = () => {
+  const [firstRangeReadings, setFirstRangeReadings] = useState<BloodGlucose[]>(
+    [],
+  );
+  const [secondRangeReadings, setSecondRangeReadings] = useState<
+    BloodGlucose[]
+  >([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [firstMetrics, setFirstMetrics] = useState<Metrics>({
-    a1cValue: null,
+    average: null,
+    min: null,
+    max: null,
+    inRange: null,
+    high: null,
+    low: null,
+    a1c: null,
     a1cStatus: null,
-    inRangePercentage: null,
-    highPercentage: null,
-    lowPercentage: null,
-    averageGlucose: null,
   });
   const [secondMetrics, setSecondMetrics] = useState<Metrics>({
-    a1cValue: null,
+    average: null,
+    min: null,
+    max: null,
+    inRange: null,
+    high: null,
+    low: null,
+    a1c: null,
     a1cStatus: null,
-    inRangePercentage: null,
-    highPercentage: null,
-    lowPercentage: null,
-    averageGlucose: null,
   });
-  const [_ranges, setRanges] = useState({low: 70, high: 180});
-  const [_isLoading, setIsLoading] = useState(false);
 
-  const calculateMetrics = (
+  const calculateMetrics = async (
     readings: BloodGlucose[],
-    currentRanges: {low: number; high: number},
-  ): Metrics => {
+  ): Promise<Metrics> => {
     if (readings.length === 0) {
       return {
-        a1cValue: null,
+        average: null,
+        min: null,
+        max: null,
+        inRange: null,
+        high: null,
+        low: null,
+        a1c: null,
         a1cStatus: null,
-        inRangePercentage: null,
-        highPercentage: null,
-        lowPercentage: null,
-        averageGlucose: null,
       };
     }
 
-    try {
-      const totalReadings = readings.length;
-      const inRange = readings.filter(
-        reading =>
-          reading.value >= currentRanges.low &&
-          reading.value <= currentRanges.high,
-      ).length;
-      const high = readings.filter(
-        reading => reading.value > currentRanges.high,
-      ).length;
-      const low = readings.filter(
-        reading => reading.value < currentRanges.low,
-      ).length;
+    const values = readings.map(r => r.value);
+    const average = values.reduce((a, b) => a + b, 0) / values.length;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
 
-      const averageGlucose =
-        readings.reduce((sum, reading) => sum + reading.value, 0) /
-        totalReadings;
+    const settings = SettingsService.getInstance();
+    const ranges = await settings.getRanges();
+    const currentRanges = {
+      low: ranges.useCustomRanges ? ranges.customLow ?? ranges.low : ranges.low,
+      high: ranges.useCustomRanges
+        ? ranges.customHigh ?? ranges.high
+        : ranges.high,
+    };
 
-      const a1cValue = calculateA1C(readings);
-      const a1cStatus =
-        a1cValue !== null && parseFloat(a1cValue) < 5.7
-          ? 'Normal'
-          : a1cValue !== null && parseFloat(a1cValue) < 6.5
-          ? 'Prediabetes'
-          : 'Diabetes';
+    const inRange = readings.filter(
+      r => r.value >= currentRanges.low && r.value <= currentRanges.high,
+    ).length;
+    const high = readings.filter(r => r.value > currentRanges.high).length;
+    const low = readings.filter(r => r.value < currentRanges.low).length;
 
-      return {
-        a1cValue: a1cValue !== null ? parseFloat(a1cValue) : null,
-        a1cStatus,
-        inRangePercentage: (inRange / totalReadings) * 100,
-        highPercentage: (high / totalReadings) * 100,
-        lowPercentage: (low / totalReadings) * 100,
-        averageGlucose,
-      };
-    } catch (error) {
-      return {
-        a1cValue: null,
-        a1cStatus: null,
-        inRangePercentage: null,
-        highPercentage: null,
-        lowPercentage: null,
-        averageGlucose: null,
-      };
-    }
+    const a1c = calculateA1C(readings);
+    const a1cStatus = getA1CStatus(a1c);
+
+    return {
+      average,
+      min,
+      max,
+      inRange: (inRange / readings.length) * 100,
+      high: (high / readings.length) * 100,
+      low: (low / readings.length) * 100,
+      a1c,
+      a1cStatus,
+    };
   };
 
-  const loadData = useCallback(async () => {
+  const loadReadings = useCallback(async () => {
     try {
-      setIsLoading(true);
-
-      // Load ranges
-      const settings = SettingsService.getInstance();
-      const savedRanges = await settings.getRanges();
-      const newRanges = {
-        low: savedRanges.useCustomRanges
-          ? savedRanges.customLow ?? savedRanges.low
-          : savedRanges.low,
-        high: savedRanges.useCustomRanges
-          ? savedRanges.customHigh ?? savedRanges.high
-          : savedRanges.high,
-      };
-      setRanges(newRanges);
-
-      // Load readings
-      const now = new Date();
-      const firstStartDate = subDays(now, firstRange);
-      const secondStartDate = subDays(now, secondRange);
+      setLoading(true);
+      setError(null);
 
       const db = DatabaseService.getInstance();
       await db.initDB();
 
-      const firstReadings = await db.getReadingsByDateRange(
-        firstStartDate,
-        now,
-      );
-      const secondReadings = await db.getReadingsByDateRange(
-        secondStartDate,
-        now,
-      );
+      const today = new Date();
+      const firstRangeEnd = today;
+      const firstRangeStart = subDays(today, 90);
+      const secondRangeEnd = firstRangeStart;
+      const secondRangeStart = subDays(secondRangeEnd, 90);
 
-      setFirstMetrics(calculateMetrics(firstReadings, newRanges));
-      setSecondMetrics(calculateMetrics(secondReadings, newRanges));
-    } catch (error) {
-      Alert.alert('Error', 'Failed to load comparison data');
+      // Load readings for first range (most recent 90 days)
+      const firstReadings = await db.getReadingsByDateRange(
+        firstRangeStart,
+        firstRangeEnd,
+      );
+      setFirstRangeReadings(firstReadings);
+      const firstMetricsResult = await calculateMetrics(firstReadings);
+      setFirstMetrics(firstMetricsResult);
+
+      // Load readings for second range (previous 90 days)
+      const secondReadings = await db.getReadingsByDateRange(
+        secondRangeStart,
+        secondRangeEnd,
+      );
+      setSecondRangeReadings(secondReadings);
+      const secondMetricsResult = await calculateMetrics(secondReadings);
+      setSecondMetrics(secondMetricsResult);
+    } catch (err) {
+      setError('Failed to load readings');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, [firstRange, secondRange]);
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadReadings();
+  }, [loadReadings]);
 
-  const handleTimeRangeChange = (range: number, isFirst: boolean) => {
-    if (isFirst) {
-      setFirstRange(range);
-    } else {
-      setSecondRange(range);
-    }
-  };
-
-  const renderMetricRow = (
-    label: string,
-    firstValue: number | null,
-    secondValue: number | null,
-    unit: string = '',
-  ) => {
-    const difference =
-      firstValue && secondValue ? firstValue - secondValue : null;
-    const differenceColor = difference
-      ? difference > 0
-        ? '#4CAF50'
-        : difference < 0
-        ? '#F44336'
-        : '#2196F3'
-      : '#9E9E9E';
-
+  if (loading) {
     return (
-      <View style={styles.metricRow}>
-        <Text style={styles.metricLabel}>{label}</Text>
-        <View style={styles.metricValues}>
-          <Text style={styles.metricValue}>
-            {firstValue !== null ? `${firstValue.toFixed(1)}${unit}` : 'N/A'}
-          </Text>
-          <Text style={styles.metricValue}>
-            {secondValue !== null ? `${secondValue.toFixed(1)}${unit}` : 'N/A'}
-          </Text>
-          <Text style={[styles.metricValue, {color: differenceColor}]}>
-            {difference !== null
-              ? `${difference > 0 ? '+' : ''}${difference.toFixed(1)}${unit}`
-              : 'N/A'}
-          </Text>
-        </View>
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#007AFF" />
       </View>
     );
-  };
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Compare Time Ranges</Text>
-        </View>
+    <ScrollView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>90-Day Comparison</Text>
+        <Text style={styles.headerSubtitle}>
+          Comparing the last 90 days with the previous 90 days
+        </Text>
+      </View>
 
-        <View style={styles.timeRangeContainer}>
-          <View style={styles.timeRangeSection}>
-            <Text style={styles.sectionTitle}>First Range</Text>
-            <View style={styles.timeRangeButtons}>
-              {TIME_RANGES.map(range => (
-                <TouchableOpacity
-                  key={range.value}
-                  style={[
-                    styles.timeRangeButton,
-                    firstRange === range.value && styles.timeRangeButtonActive,
-                  ]}
-                  onPress={() => handleTimeRangeChange(range.value, true)}>
-                  <Text
-                    style={[
-                      styles.timeRangeButtonText,
-                      firstRange === range.value &&
-                        styles.timeRangeButtonTextActive,
-                    ]}>
-                    {range.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+      {firstRangeReadings.length > 0 && secondRangeReadings.length > 0 && (
+        <View style={styles.resultsContainer}>
+          <View style={styles.metricsContainer}>
+            <Text style={styles.metricsTitle}>
+              Current Period (Last 3 Months)
+            </Text>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Average:</Text>
+              <Text style={styles.metricValue}>
+                {firstMetrics.average?.toFixed(1) ?? 'N/A'} mg/dL
+              </Text>
             </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>In Range:</Text>
+              <Text style={styles.metricValue}>
+                {firstMetrics.inRange?.toFixed(1) ?? 'N/A'}%
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>High:</Text>
+              <Text style={styles.metricValue}>
+                {firstMetrics.high?.toFixed(1) ?? 'N/A'}%
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Low:</Text>
+              <Text style={styles.metricValue}>
+                {firstMetrics.low?.toFixed(1) ?? 'N/A'}%
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>A1C:</Text>
+              <Text
+                style={[
+                  styles.metricValue,
+                  {color: getA1CColor(firstMetrics.a1c)},
+                ]}>
+                {firstMetrics.a1c ?? 'N/A'}%
+              </Text>
+            </View>
+            {firstMetrics.a1cStatus && (
+              <Text
+                style={[
+                  styles.a1cStatus,
+                  {color: getA1CColor(firstMetrics.a1c)},
+                ]}>
+                {firstMetrics.a1cStatus}
+              </Text>
+            )}
           </View>
 
-          <View style={styles.timeRangeSection}>
-            <Text style={styles.sectionTitle}>Second Range</Text>
-            <View style={styles.timeRangeButtons}>
-              {TIME_RANGES.map(range => (
-                <TouchableOpacity
-                  key={range.value}
-                  style={[
-                    styles.timeRangeButton,
-                    secondRange === range.value && styles.timeRangeButtonActive,
-                  ]}
-                  onPress={() => handleTimeRangeChange(range.value, false)}>
-                  <Text
-                    style={[
-                      styles.timeRangeButtonText,
-                      secondRange === range.value &&
-                        styles.timeRangeButtonTextActive,
-                    ]}>
-                    {range.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          <View style={styles.metricsContainer}>
+            <Text style={styles.metricsTitle}>
+              Previous Period (3 Months Before)
+            </Text>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Average:</Text>
+              <Text style={styles.metricValue}>
+                {secondMetrics.average?.toFixed(1) ?? 'N/A'} mg/dL
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>In Range:</Text>
+              <Text style={styles.metricValue}>
+                {secondMetrics.inRange?.toFixed(1) ?? 'N/A'}%
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>High:</Text>
+              <Text style={styles.metricValue}>
+                {secondMetrics.high?.toFixed(1) ?? 'N/A'}%
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Low:</Text>
+              <Text style={styles.metricValue}>
+                {secondMetrics.low?.toFixed(1) ?? 'N/A'}%
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>A1C:</Text>
+              <Text
+                style={[
+                  styles.metricValue,
+                  {color: getA1CColor(secondMetrics.a1c)},
+                ]}>
+                {secondMetrics.a1c ?? 'N/A'}%
+              </Text>
+            </View>
+            {secondMetrics.a1cStatus && (
+              <Text
+                style={[
+                  styles.a1cStatus,
+                  {color: getA1CColor(secondMetrics.a1c)},
+                ]}>
+                {secondMetrics.a1cStatus}
+              </Text>
+            )}
+          </View>
+
+          <View style={[styles.metricsContainer, styles.differenceContainer]}>
+            <Text style={styles.metricsTitle}>
+              Progress (Current vs Previous Period)
+            </Text>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Average:</Text>
+              <Text
+                style={[
+                  styles.metricValue,
+                  styles.differenceValue,
+                  firstMetrics.average && secondMetrics.average
+                    ? firstMetrics.average < secondMetrics.average
+                      ? styles.positiveDifference
+                      : styles.negativeDifference
+                    : null,
+                ]}>
+                {firstMetrics.average && secondMetrics.average
+                  ? `${(firstMetrics.average - secondMetrics.average).toFixed(
+                      1,
+                    )} mg/dL`
+                  : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>In Range:</Text>
+              <Text
+                style={[
+                  styles.metricValue,
+                  styles.differenceValue,
+                  firstMetrics.inRange && secondMetrics.inRange
+                    ? firstMetrics.inRange > secondMetrics.inRange
+                      ? styles.positiveDifference
+                      : styles.negativeDifference
+                    : null,
+                ]}>
+                {firstMetrics.inRange && secondMetrics.inRange
+                  ? `${(firstMetrics.inRange - secondMetrics.inRange).toFixed(
+                      1,
+                    )}%`
+                  : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>High:</Text>
+              <Text
+                style={[
+                  styles.metricValue,
+                  styles.differenceValue,
+                  firstMetrics.high && secondMetrics.high
+                    ? firstMetrics.high < secondMetrics.high
+                      ? styles.positiveDifference
+                      : styles.negativeDifference
+                    : null,
+                ]}>
+                {firstMetrics.high && secondMetrics.high
+                  ? `${(firstMetrics.high - secondMetrics.high).toFixed(1)}%`
+                  : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Low:</Text>
+              <Text
+                style={[
+                  styles.metricValue,
+                  styles.differenceValue,
+                  firstMetrics.low && secondMetrics.low
+                    ? firstMetrics.low < secondMetrics.low
+                      ? styles.positiveDifference
+                      : styles.negativeDifference
+                    : null,
+                ]}>
+                {firstMetrics.low && secondMetrics.low
+                  ? `${(firstMetrics.low - secondMetrics.low).toFixed(1)}%`
+                  : 'N/A'}
+              </Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>A1C:</Text>
+              <Text
+                style={[
+                  styles.metricValue,
+                  styles.differenceValue,
+                  firstMetrics.a1c && secondMetrics.a1c
+                    ? parseFloat(firstMetrics.a1c) <
+                      parseFloat(secondMetrics.a1c)
+                      ? styles.positiveDifference
+                      : styles.negativeDifference
+                    : null,
+                ]}>
+                {firstMetrics.a1c && secondMetrics.a1c
+                  ? `${(
+                      parseFloat(firstMetrics.a1c) -
+                      parseFloat(secondMetrics.a1c)
+                    ).toFixed(1)}%`
+                  : 'N/A'}
+              </Text>
             </View>
           </View>
         </View>
-
-        <View style={styles.metricsContainer}>
-          <View style={styles.metricsHeader}>
-            <Text style={styles.metricsTitle}>Metric</Text>
-            <View style={styles.metricValues}>
-              <Text style={styles.metricValue}>First</Text>
-              <Text style={styles.metricValue}>Second</Text>
-              <Text style={styles.metricValue}>Difference</Text>
-            </View>
-          </View>
-
-          {renderMetricRow(
-            'A1C',
-            firstMetrics.a1cValue,
-            secondMetrics.a1cValue,
-            '%',
-          )}
-          {renderMetricRow(
-            'In Range',
-            firstMetrics.inRangePercentage,
-            secondMetrics.inRangePercentage,
-            '%',
-          )}
-          {renderMetricRow(
-            'High',
-            firstMetrics.highPercentage,
-            secondMetrics.highPercentage,
-            '%',
-          )}
-          {renderMetricRow(
-            'Low',
-            firstMetrics.lowPercentage,
-            secondMetrics.lowPercentage,
-            '%',
-          )}
-          {renderMetricRow(
-            'Average Glucose',
-            firstMetrics.averageGlucose,
-            secondMetrics.averageGlucose,
-            ' mg/dL',
-          )}
-        </View>
-      </ScrollView>
-    </View>
+      )}
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  content: {
-    flex: 1,
+    backgroundColor: '#fff',
   },
   header: {
     padding: 16,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#E5E5EA',
   },
-  title: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333333',
+    marginBottom: 4,
   },
-  timeRangeContainer: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    marginBottom: 16,
-  },
-  timeRangeSection: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
+  headerSubtitle: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#333333',
+    color: '#666',
   },
-  timeRangeButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  timeRangeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F5',
-  },
-  timeRangeButtonActive: {
-    backgroundColor: '#2196F3',
-  },
-  timeRangeButtonText: {
-    fontSize: 14,
-    color: '#666666',
-  },
-  timeRangeButtonTextActive: {
-    color: '#FFFFFF',
+  resultsContainer: {
+    padding: 16,
   },
   metricsContainer: {
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
     padding: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  metricsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   metricsTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#333333',
-  },
-  metricValues: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    flex: 1,
-    marginLeft: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
   },
   metricRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
+    marginBottom: 8,
   },
   metricLabel: {
     fontSize: 14,
-    color: '#666666',
+    color: '#666',
   },
   metricValue: {
     fontSize: 14,
-    color: '#333333',
+    fontWeight: '500',
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 16,
     textAlign: 'center',
-    flex: 1,
+    margin: 16,
+  },
+  differenceContainer: {
+    borderTopWidth: 2,
+    borderTopColor: '#E5E5EA',
+    marginTop: 8,
+  },
+  differenceValue: {
+    fontWeight: 'bold',
+  },
+  positiveDifference: {
+    color: '#34C759', // Green for positive changes
+  },
+  negativeDifference: {
+    color: '#FF3B30', // Red for negative changes
+  },
+  a1cStatus: {
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: 'right',
   },
 });
