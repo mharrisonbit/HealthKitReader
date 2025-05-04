@@ -15,6 +15,7 @@ import {SettingsService} from '../services/settingsService';
 import {subDays, subMonths} from 'date-fns';
 import {HealthService} from '../services/healthService';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import {useNavigation} from '@react-navigation/native';
 
 const databaseService = DatabaseService.getInstance();
 const settingsService = SettingsService.getInstance();
@@ -30,6 +31,7 @@ const TIME_RANGES = [
 ];
 
 export const HomeScreen: React.FC = () => {
+  const navigation = useNavigation();
   const [readings, setReadings] = useState<BloodGlucose[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [ranges, setRanges] = useState({low: 70, high: 180});
@@ -256,6 +258,15 @@ export const HomeScreen: React.FC = () => {
 
     initialize();
   }, []); // Empty dependency array since we're handling all dependencies inside
+
+  // Refresh data when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadReadings();
+    });
+
+    return unsubscribe;
+  }, [navigation, loadReadings]);
 
   // Subscribe to range changes
   useEffect(() => {
