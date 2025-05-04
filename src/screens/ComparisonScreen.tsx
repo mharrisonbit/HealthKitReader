@@ -12,6 +12,7 @@ import {SettingsService} from '../services/settingsService';
 import {subDays} from 'date-fns';
 import {calculateA1C} from '../utils/a1cCalculator';
 import {getA1CStatus} from '../utils/a1cStatus';
+import {useNavigation} from '@react-navigation/native';
 
 interface Metrics {
   average: number | null;
@@ -35,6 +36,7 @@ const getA1CColor = (a1c: string | null): string => {
 };
 
 export const ComparisonScreen: React.FC = () => {
+  const navigation = useNavigation();
   const [firstRangeReadings, setFirstRangeReadings] = useState<BloodGlucose[]>(
     [],
   );
@@ -153,9 +155,19 @@ export const ComparisonScreen: React.FC = () => {
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
     loadReadings();
   }, [loadReadings]);
+
+  // Refresh data when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadReadings();
+    });
+
+    return unsubscribe;
+  }, [navigation, loadReadings]);
 
   if (loading) {
     return (
