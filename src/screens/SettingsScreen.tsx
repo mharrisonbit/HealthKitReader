@@ -18,6 +18,7 @@ import {RootStackParamList} from '../types/navigation';
 import {SettingsService} from '../services/settingsService';
 import {DatabaseService} from '../services/database';
 import {HealthService} from '../services/healthService';
+import Logger from '../utils/logger';
 
 type SettingsScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Settings'>;
@@ -65,7 +66,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
           : savedRanges.high,
       });
     } catch (error) {
-      console.error('Error loading settings:', error);
+      Logger.error('Error loading settings:', error);
     }
   };
 
@@ -82,7 +83,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
       setTempRanges(selectedRange);
       Alert.alert('Success', 'Ranges updated successfully');
     } catch (error) {
-      console.error('Error saving ranges:', error);
+      Logger.error('Error saving ranges:', error);
       Alert.alert('Error', 'Failed to save ranges');
     }
   };
@@ -98,7 +99,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         useCustomRanges: !prev.useCustomRanges,
       }));
     } catch (error) {
-      console.error('Error toggling custom ranges:', error);
+      Logger.error('Error toggling custom ranges:', error);
       Alert.alert('Error', 'Failed to update settings');
     }
   };
@@ -123,7 +124,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
                 {text: 'OK'},
               ]);
             } catch (error) {
-              console.error('Error resetting database:', error);
+              Logger.error('Error resetting database:', error);
               Alert.alert(
                 'Error',
                 'Failed to reset database. Please try again.',
@@ -230,7 +231,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         `Successfully imported ${importedCount} new readings\n${duplicateCount} duplicates were skipped`,
       );
     } catch (error) {
-      console.error('Error importing readings:', error);
+      Logger.error('Error importing readings:', error);
       Alert.alert('Error', 'Failed to import readings');
     } finally {
       setIsImporting(false);

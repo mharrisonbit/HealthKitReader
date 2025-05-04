@@ -3,6 +3,8 @@ import GoogleFit, {Scopes} from 'react-native-google-fit';
 import AppleHealthKit from 'react-native-health';
 import {DatabaseService} from './database';
 import {SettingsService} from './settingsService';
+import {BloodGlucose} from '../types/BloodGlucose';
+import Logger from '../utils/logger';
 
 interface GoogleFitBloodGlucose {
   value: number;
@@ -48,14 +50,32 @@ export class HealthService {
     return HealthService.instance;
   }
 
-  async initializeHealthKit(): Promise<boolean> {
+  async initialize(): Promise<void> {
+    if (Platform.OS === 'ios') {
+      try {
+        await this.initializeHealthKit();
+      } catch (error) {
+        Logger.error('Error initializing HealthKit:', error);
+        throw error;
+      }
+    } else {
+      try {
+        await this.initializeGoogleFit();
+      } catch (error) {
+        Logger.error('Error initializing Google Fit:', error);
+        throw error;
+      }
+    }
+  }
+
+  private async initializeHealthKit(): Promise<void> {
     if (this.isHealthKitInitialized) {
-      return true;
+      return;
     }
 
     if (Platform.OS !== 'ios') {
       // console.log('HealthKit is only available on iOS');
-      return false;
+      return;
     }
 
     try {
@@ -71,36 +91,36 @@ export class HealthService {
         },
       };
 
-      return new Promise(resolve => {
+      await new Promise(resolve => {
         AppleHealthKit.initHealthKit(permissions, (error: string) => {
           if (error) {
             console.error('Error initializing HealthKit:', error);
-            resolve(false);
+            resolve();
           } else {
             this.isHealthKitInitialized = true;
-            resolve(true);
+            resolve();
           }
         });
       });
     } catch (error) {
       console.error('Error initializing HealthKit:', error);
-      return false;
+      throw error;
     }
   }
 
-  async initializeGoogleFit(): Promise<boolean> {
+  private async initializeGoogleFit(): Promise<void> {
     if (this.isGoogleFitInitialized) {
-      return true;
+      return;
     }
 
     if (Platform.OS !== 'android') {
       // console.log('Google Fit is only available on Android');
-      return false;
+      return;
     }
 
     if (!GoogleFit) {
       console.error('GoogleFit module is not available');
-      return false;
+      throw new Error('GoogleFit module is not available');
     }
 
     try {
@@ -113,10 +133,9 @@ export class HealthService {
       };
       await GoogleFit.authorize(options);
       this.isGoogleFitInitialized = true;
-      return true;
     } catch (error) {
       console.error('Error initializing Google Fit:', error);
-      return false;
+      throw error;
     }
   }
 
