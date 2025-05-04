@@ -74,7 +74,7 @@ export class HealthService {
     }
 
     if (Platform.OS !== 'ios') {
-      // console.log('HealthKit is only available on iOS');
+      Logger.log('HealthKit is only available on iOS');
       return;
     }
 
@@ -91,19 +91,20 @@ export class HealthService {
         },
       };
 
-      await new Promise(resolve => {
+      await new Promise<void>((resolve, reject) => {
         AppleHealthKit.initHealthKit(permissions, (error: string) => {
           if (error) {
-            console.error('Error initializing HealthKit:', error);
-            resolve();
+            Logger.error('Error initializing HealthKit:', error);
+            reject(new Error(error));
           } else {
+            Logger.log('HealthKit initialized successfully');
             this.isHealthKitInitialized = true;
             resolve();
           }
         });
       });
     } catch (error) {
-      console.error('Error initializing HealthKit:', error);
+      Logger.error('Error in HealthKit initialization:', error);
       throw error;
     }
   }
@@ -143,89 +144,62 @@ export class HealthService {
     startDate: Date,
     endDate: Date,
   ): Promise<HealthValue[]> {
-    if (Platform.OS !== 'ios') {
-      return [];
-    }
-
-    const initialized = await this.initializeHealthKit();
-    if (!initialized) {
+    if (Platform.OS !== 'ios' || !this.isHealthKitInitialized) {
       return [];
     }
 
     try {
-      // Calculate the date one year ago from now
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-
-      // Use the later of the two dates (one year ago or provided start date)
-      const adjustedStartDate = new Date(
-        Math.max(oneYearAgo.getTime(), startDate.getTime()),
+      Logger.log('Fetching blood glucose from HealthKit...');
+      Logger.log(
+        `Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`,
       );
 
-      // Add 1 day buffer to ensure we don't miss entries
-      adjustedStartDate.setDate(adjustedStartDate.getDate() - 1);
-
-      const options = {
-        startDate: adjustedStartDate.toISOString(),
-        endDate: endDate.toISOString(),
-        ascending: true,
-      };
-
-      console.log(
-        `[${new Date().toISOString()}] Querying HealthKit with date range:`,
-        {
-          startDate: options.startDate,
-          endDate: options.endDate,
-          currentTime: new Date().toISOString(),
-        },
-      );
-
-      return new Promise(resolve => {
+      const result = await new Promise<HealthValue[]>((resolve, reject) => {
         AppleHealthKit.getBloodGlucoseSamples(
-          options,
-          (error: string, samples: any[]) => {
-            if (error) {
-              console.error(
-                `[${new Date().toISOString()}] Error getting blood glucose from HealthKit:`,
-                error,
-              );
-              resolve([]);
+          {
+            startDate: startDate.toISOString(),
+            endDate: endDate.toISOString(),
+            unit: AppleHealthKit.Constants.Units.mgPerdL,
+          },
+          (err, results) => {
+            if (err) {
+              Logger.error('Error fetching blood glucose from HealthKit:', err);
+              reject(err);
             } else {
-              console.log(
-                `[${new Date().toISOString()}] Retrieved ${
-                  samples.length
-                } samples from HealthKit`,
+              Logger.log(
+                `Retrieved ${results?.length || 0} readings from HealthKit`,
               );
-              const convertedSamples = samples.map((result: any) => {
-                // Convert from mmol/L to mg/dL
-                const valueInMgDl = Math.round(result.value * 18.0182);
-                console.log(
-                  `[${new Date().toISOString()}] Processing sample:`,
-                  {
-                    originalValue: result.value,
-                    convertedValue: valueInMgDl,
-                    startDate: result.startDate,
-                    endDate: result.endDate,
-                    sourceName: result.sourceName || 'Unknown',
-                    unit: result.unit || 'Unknown',
+              // Convert the readings to the correct format
+              const convertedReadings = (results || []).map(reading => {
+                // Convert value to number and ensure it's in mg/dL
+                let value = Number(reading.value);
+                if (reading.unit === AppleHealthKit.Constants.Units.mmolPerL) {
+                  // Convert from mmol/L to mg/dL
+                  value = Math.round(value * 18.0182);
+                }
+                Logger.log('Converted reading:', {
+                  original: reading,
+                  converted: {
+                    value,
+                    startDate: reading.startDate,
+                    endDate: reading.endDate,
                   },
-                );
+                });
                 return {
-                  value: valueInMgDl,
-                  startDate: result.startDate,
-                  endDate: result.endDate,
+                  value,
+                  startDate: reading.startDate,
+                  endDate: reading.endDate,
                 };
               });
-              resolve(convertedSamples);
+              resolve(convertedReadings);
             }
           },
         );
       });
+
+      return result;
     } catch (error) {
-      console.error(
-        `[${new Date().toISOString()}] Error getting blood glucose from HealthKit:`,
-        error,
-      );
+      Logger.error('Error in getBloodGlucoseFromHealthKit:', error);
       return [];
     }
   }
@@ -281,12 +255,19 @@ export class HealthService {
         this.getBloodGlucoseFromGoogleFit(startDate, endDate),
       ]);
 
+      Logger.log(
+        `Retrieved ${healthKitReadings.length} readings from HealthKit`,
+      );
+      Logger.log(
+        `Retrieved ${googleFitReadings.length} readings from Google Fit`,
+      );
+
       return {
         healthKit: healthKitReadings,
         googleFit: googleFitReadings,
       };
     } catch (error) {
-      console.error('Error getting blood glucose readings:', error);
+      Logger.error('Error getting blood glucose readings:', error);
       return {
         healthKit: [],
         googleFit: [],
@@ -295,65 +276,71 @@ export class HealthService {
   }
 
   async hasHealthKitPermission(): Promise<boolean> {
-    if (Platform.OS !== 'ios' || !this.healthKit) {
+    if (Platform.OS !== 'ios') {
       return false;
     }
 
     try {
-      const permissions = {
-        permissions: {
-          read: [AppleHealthKit.Constants.Permissions.BloodGlucose],
-          write: [AppleHealthKit.Constants.Permissions.BloodGlucose],
-        },
-      };
-
-      return new Promise(resolve => {
-        this.healthKit?.getAuthStatus(
-          permissions,
-          (error: string, results: any) => {
-            if (error) {
-              console.error('Error checking HealthKit permissions:', error);
+      const result = await new Promise<boolean>(resolve => {
+        AppleHealthKit.getAuthStatus(
+          {
+            permissions: {
+              read: [AppleHealthKit.Constants.Permissions.BloodGlucose],
+              write: [AppleHealthKit.Constants.Permissions.BloodGlucose],
+            },
+          },
+          (err, results) => {
+            if (err) {
+              Logger.error('Error checking HealthKit permissions:', err);
               resolve(false);
             } else {
-              const bloodGlucosePermission =
-                results[AppleHealthKit.Constants.Permissions.BloodGlucose];
-              resolve(bloodGlucosePermission === 2); // 2 = authorized
+              const hasPermission = results?.permissions?.read?.includes(
+                AppleHealthKit.Constants.Permissions.BloodGlucose,
+              );
+              Logger.log('HealthKit permission status:', hasPermission);
+              resolve(hasPermission);
             }
           },
         );
       });
+
+      return result;
     } catch (error) {
-      console.error('Error checking HealthKit permissions:', error);
+      Logger.error('Error checking HealthKit permissions:', error);
       return false;
     }
   }
 
   async requestHealthKitPermission(): Promise<boolean> {
-    if (Platform.OS !== 'ios' || !this.healthKit) {
+    if (Platform.OS !== 'ios') {
       return false;
     }
 
     try {
-      const permissions = {
-        permissions: {
-          read: [AppleHealthKit.Constants.Permissions.BloodGlucose],
-          write: [AppleHealthKit.Constants.Permissions.BloodGlucose],
-        },
-      };
-
-      return new Promise(resolve => {
-        this.healthKit?.initHealthKit(permissions, (error: string) => {
-          if (error) {
-            console.error('Error requesting HealthKit permissions:', error);
-            resolve(false);
-          } else {
-            this.isHealthKitInitialized = true;
-            resolve(true);
-          }
-        });
+      const result = await new Promise<boolean>(resolve => {
+        AppleHealthKit.initHealthKit(
+          {
+            permissions: {
+              read: [AppleHealthKit.Constants.Permissions.BloodGlucose],
+              write: [AppleHealthKit.Constants.Permissions.BloodGlucose],
+            },
+          },
+          err => {
+            if (err) {
+              Logger.error('Error requesting HealthKit permissions:', err);
+              resolve(false);
+            } else {
+              Logger.log('HealthKit permission request successful');
+              this.isHealthKitInitialized = true;
+              resolve(true);
+            }
+          },
+        );
       });
+
+      return result;
     } catch (error) {
-      console.error('Error requesting HealthKit permissions:', error);
+      Logger.error('Error requesting HealthKit permissions:', error);
       return false;
     }
   }
@@ -428,39 +415,32 @@ export class HealthService {
       return;
     }
 
-    const initialized = await this.initializeHealthKit();
-    if (!initialized) {
-      return;
-    }
-
     try {
+      await this.initializeHealthKit();
+
       // Convert from mg/dL to mmol/L for HealthKit
       const valueInMmolL = value / 18.0182;
-      // console.log('Saving to HealthKit:', {
-      //   value,
-      //   date: date.toISOString(),
-      //   unit: 'mg/dL',
-      // });
 
       await new Promise<void>((resolve, reject) => {
         AppleHealthKit.saveBloodGlucoseSample(
           {
             value: valueInMmolL,
             startDate: date.toISOString(),
+            unit: AppleHealthKit.Constants.Units.mmolPerL,
           },
           (error: string) => {
             if (error) {
-              console.error('Error saving to HealthKit:', error);
+              Logger.error('Error saving to HealthKit:', error);
               reject(new Error(error));
             } else {
-              // console.log('Successfully saved to HealthKit:', value, 'mg/dL');
+              Logger.log('Successfully saved to HealthKit:', value, 'mg/dL');
               resolve();
             }
           },
         );
       });
     } catch (error) {
-      console.error('Error saving blood glucose to HealthKit:', error);
+      Logger.error('Error saving blood glucose to HealthKit:', error);
       throw error;
     }
   }

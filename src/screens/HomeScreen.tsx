@@ -31,197 +31,22 @@ const TIME_RANGES = [
   {label: '1Y', value: 365},
 ];
 
-export const HomeScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const [readings, setReadings] = useState<BloodGlucose[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [ranges, setRanges] = useState({low: 70, high: 180});
-  const [metrics, setMetrics] = useState({
-    a1cValue: null as number | null,
-    a1cStatus: null as string | null,
-    inRangePercentage: null as number | null,
-    highPercentage: null as number | null,
-    lowPercentage: null as number | null,
-    averageGlucose: null as number | null,
-  });
-  const [selectedTimeRange, setSelectedTimeRange] = useState<number>(90); // Default to 3 months
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [selectedInfo, setSelectedInfo] = useState<string | null>(null);
+const calculateA1C = (averageGlucose: number): number => {
+  // Formula: (averageGlucose + 46.7) / 28.7
+  return (averageGlucose + 46.7) / 28.7;
+};
 
-  const calculateMetrics = useCallback(async (readings: BloodGlucose[]) => {
-    try {
-      const ranges = await settingsService.getRanges();
-      const {low, high} = ranges;
+const getA1CStatus = (a1c: number): string => {
+  if (a1c >= 9.0) return 'Extremely High';
+  if (a1c >= 6.5) return 'Diabetic';
+  if (a1c >= 5.7) return 'Pre-Diabetic';
+  return 'Normal';
+};
 
-      if (readings.length === 0) {
-        return {
-          average: null,
-          min: null,
-          max: null,
-          inRange: null,
-          high: null,
-          low: null,
-          a1c: null,
-          a1cStatus: null,
-        };
-      }
+type InfoKey = 'a1c' | 'current' | 'average' | 'inRange' | 'high' | 'low';
 
-      const values = readings.map(reading => reading.value);
-      const average = values.reduce((a, b) => a + b, 0) / values.length;
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-
-      const inRangeCount = values.filter(
-        value => value >= low && value <= high,
-      ).length;
-      const highCount = values.filter(value => value > high).length;
-      const lowCount = values.filter(value => value < low).length;
-
-      const inRange = (inRangeCount / values.length) * 100;
-      const highPercentage = (highCount / values.length) * 100;
-      const lowPercentage = (lowCount / values.length) * 100;
-
-      const a1c = calculateA1C(average);
-      const a1cStatus = getA1CStatus(a1c);
-
-      return {
-        average,
-        min,
-        max,
-        inRange,
-        high: highPercentage,
-        low: lowPercentage,
-        a1c,
-        a1cStatus,
-      };
-    } catch (error) {
-      Logger.error('Error calculating metrics:', error);
-      throw error;
-    }
-  }, []);
-
-  const loadReadings = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const db = DatabaseService.getInstance();
-      await db.initDB();
-
-      const today = new Date();
-      const startDate = subDays(today, 90);
-      const readings = await db.getReadingsByDateRange(startDate, today);
-      setReadings(readings);
-      const metricsResult = await calculateMetrics(readings);
-      setMetrics(metricsResult);
-    } catch (error) {
-      Logger.error('Error loading readings:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [calculateMetrics]);
-
-  const loadRanges = useCallback(async () => {
-    try {
-      const ranges = await settingsService.getRanges();
-      setRanges(ranges);
-    } catch (error) {
-      Logger.error('Error loading ranges:', error);
-    }
-  }, []);
-
-  const checkAndPromptForSync = useCallback(async () => {
-    try {
-      const healthService = HealthService.getInstance();
-      const shouldSync = await healthService.shouldSyncWithHealthKit();
-
-      if (shouldSync) {
-        setShowSyncModal(true);
-      }
-    } catch (error) {
-      Logger.error('Error checking sync status:', error);
-    }
-  }, []);
-
-  const handleSync = async () => {
-    try {
-      setIsSyncing(true);
-      const healthService = HealthService.getInstance();
-      await healthService.syncWithHealthKit();
-      await loadReadings();
-      setShowSyncModal(false);
-    } catch (error) {
-      Logger.error('Error syncing with HealthKit:', error);
-      Alert.alert('Error', 'Failed to sync with HealthKit');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  // Initial load
-  useEffect(() => {
-    const initialize = async () => {
-      try {
-        setIsLoading(true);
-        // Load ranges first
-        await loadRanges();
-        // Then load readings
-        await loadReadings();
-        // Finally check for sync
-        await checkAndPromptForSync();
-      } catch (error) {
-        Logger.error('Error during initialization:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initialize();
-  }, []); // Empty dependency array since we're handling all dependencies inside
-
-  // Refresh data when screen comes into focus
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      loadReadings();
-    });
-
-    return unsubscribe;
-  }, [navigation, loadReadings]);
-
-  // Subscribe to range changes
-  useEffect(() => {
-    const unsubscribe = settingsService.subscribe(newRanges => {
-      setRanges(newRanges);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Recalculate metrics when readings or ranges change
-  useEffect(() => {
-    if (readings.length > 0) {
-      calculateMetrics(readings);
-    }
-  }, [readings, calculateMetrics]);
-
-  const getA1CStatus = (a1c: string | null): string => {
-    if (a1c === null) return 'N/A';
-
-    const a1cNum = parseFloat(a1c);
-    if (a1cNum >= 9.0) return 'Extremely High';
-    if (a1cNum >= 6.5) return 'Diabetic';
-    if (a1cNum >= 5.7) return 'Pre-Diabetic';
-    return 'Normal';
-  };
-
-  const getA1CColor = (a1c: string | null): string => {
-    if (a1c === null) return '#666666'; // Gray for N/A
-
-    const a1cNum = parseFloat(a1c);
-    if (a1cNum >= 9.0) return '#8B0000'; // Dark red for extremely high
-    if (a1cNum >= 6.5) return '#FF0000'; // Red for diabetic
-    if (a1cNum >= 5.7) return '#FFA500'; // Orange for pre-diabetic
-    return '#4CAF50'; // Green for normal
-  };
-
-  const infoExplanations = {
+const infoExplanations: Record<InfoKey, {title: string; description: string}> =
+  {
     a1c: {
       title: 'Estimated A1C',
       description:
@@ -252,6 +77,189 @@ export const HomeScreen: React.FC = () => {
       description:
         'The percentage of your readings that are below your target range. Low readings can be dangerous and should be addressed immediately.',
     },
+  };
+
+export const HomeScreen: React.FC = () => {
+  const navigation = useNavigation();
+  const [readings, setReadings] = useState<BloodGlucose[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [ranges, setRanges] = useState({low: 70, high: 180});
+  const [metrics, setMetrics] = useState({
+    a1cValue: null as number | null,
+    a1cStatus: null as string | null,
+    inRangePercentage: null as number | null,
+    highPercentage: null as number | null,
+    lowPercentage: null as number | null,
+    averageGlucose: null as number | null,
+  });
+  const [selectedTimeRange, setSelectedTimeRange] = useState<number>(90);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [selectedInfo, setSelectedInfo] = useState<InfoKey | null>(null);
+
+  const calculateMetrics = useCallback(async (readings: BloodGlucose[]) => {
+    try {
+      const ranges = await settingsService.getRanges();
+      const {low, high} = ranges;
+
+      if (readings.length === 0) {
+        setMetrics({
+          a1cValue: null,
+          a1cStatus: null,
+          inRangePercentage: null,
+          highPercentage: null,
+          lowPercentage: null,
+          averageGlucose: null,
+        });
+        return;
+      }
+
+      const values = readings.map(reading => reading.value);
+      const average = values.reduce((a, b) => a + b, 0) / values.length;
+
+      const inRangeCount = values.filter(
+        value => value >= low && value <= high,
+      ).length;
+      const highCount = values.filter(value => value > high).length;
+      const lowCount = values.filter(value => value < low).length;
+
+      const inRange = (inRangeCount / values.length) * 100;
+      const highPercentage = (highCount / values.length) * 100;
+      const lowPercentage = (lowCount / values.length) * 100;
+
+      const a1c = calculateA1C(average);
+      const a1cStatus = getA1CStatus(a1c);
+
+      setMetrics({
+        a1cValue: a1c,
+        a1cStatus,
+        inRangePercentage: inRange,
+        highPercentage,
+        lowPercentage,
+        averageGlucose: average,
+      });
+    } catch (error) {
+      Logger.error('Error calculating metrics:', error);
+      throw error;
+    }
+  }, []);
+
+  const loadReadings = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      // Initialize database by getting readings
+      const allReadings = await databaseService.getAllReadings();
+      Logger.log(`Loaded ${allReadings.length} readings from database`);
+
+      const today = new Date();
+      const startDate = subDays(today, selectedTimeRange);
+      const filteredReadings = allReadings.filter(
+        reading => reading.timestamp >= startDate && reading.timestamp <= today,
+      );
+      Logger.log(
+        `Filtered to ${filteredReadings.length} readings for date range`,
+      );
+
+      setReadings(filteredReadings);
+      await calculateMetrics(filteredReadings);
+    } catch (error) {
+      Logger.error('Error loading readings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [calculateMetrics, selectedTimeRange]);
+
+  const loadRanges = useCallback(async () => {
+    try {
+      const ranges = await settingsService.getRanges();
+      setRanges(ranges);
+    } catch (error) {
+      Logger.error('Error loading ranges:', error);
+    }
+  }, []);
+
+  const checkAndPromptForSync = useCallback(async () => {
+    try {
+      const oldestDate = await healthService.getOldestBloodGlucoseDate();
+      if (!oldestDate) return;
+
+      const now = new Date();
+      const hoursSinceLastSync =
+        (now.getTime() - oldestDate.getTime()) / (1000 * 60 * 60);
+
+      if (hoursSinceLastSync >= 12) {
+        setShowSyncModal(true);
+      }
+    } catch (error) {
+      Logger.error('Error checking sync status:', error);
+    }
+  }, []);
+
+  const handleSync = useCallback(async () => {
+    try {
+      setIsSyncing(true);
+      await healthService.syncWithHealthKit();
+      await loadReadings();
+      setShowSyncModal(false);
+    } catch (error) {
+      Logger.error('Error syncing with HealthKit:', error);
+      Alert.alert('Error', 'Failed to sync with HealthKit');
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [loadReadings]);
+
+  // Initial load
+  useEffect(() => {
+    const initialize = async () => {
+      try {
+        setIsLoading(true);
+        await loadRanges();
+        await loadReadings();
+        await checkAndPromptForSync();
+      } catch (error) {
+        Logger.error('Error during initialization:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initialize();
+  }, [loadRanges, loadReadings, checkAndPromptForSync]);
+
+  // Refresh data when screen comes into focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadReadings();
+    });
+
+    return unsubscribe;
+  }, [navigation, loadReadings]);
+
+  // Subscribe to range changes
+  useEffect(() => {
+    const unsubscribe = settingsService.subscribe(newRanges => {
+      setRanges(newRanges);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Recalculate metrics when readings or ranges change
+  useEffect(() => {
+    if (readings.length > 0) {
+      calculateMetrics(readings);
+    }
+  }, [readings, calculateMetrics]);
+
+  const getA1CColor = (a1c: string | null): string => {
+    if (a1c === null) return '#666666'; // Gray for N/A
+
+    const a1cNum = parseFloat(a1c);
+    if (a1cNum >= 9.0) return '#8B0000'; // Dark red for extremely high
+    if (a1cNum >= 6.5) return '#FF0000'; // Red for diabetic
+    if (a1cNum >= 5.7) return '#FFA500'; // Orange for pre-diabetic
+    return '#4CAF50'; // Green for normal
   };
 
   if (isLoading) {
@@ -335,18 +343,12 @@ export const HomeScreen: React.FC = () => {
                     </TouchableOpacity>
                   </View>
                   <Text style={styles.statValue}>
-                    {metrics.a1cValue
+                    {metrics.a1cValue !== null
                       ? `${metrics.a1cValue.toFixed(1)}%`
                       : 'No readings'}
                   </Text>
                   {metrics.a1cStatus && (
-                    <Text
-                      style={[
-                        styles.a1cStatus,
-                        {color: getA1CColor(metrics.a1cStatus)},
-                      ]}>
-                      {metrics.a1cStatus}
-                    </Text>
+                    <Text style={styles.a1cStatus}>{metrics.a1cStatus}</Text>
                   )}
                 </View>
 
@@ -385,7 +387,7 @@ export const HomeScreen: React.FC = () => {
                   </View>
                   <Text style={styles.statValue}>
                     {metrics.averageGlucose !== null
-                      ? `${metrics.averageGlucose} mg/dL`
+                      ? `${metrics.averageGlucose.toFixed(2)} mg/dL`
                       : 'No readings'}
                   </Text>
                 </View>
@@ -512,7 +514,7 @@ export const HomeScreen: React.FC = () => {
                 </View>
                 <Text style={styles.statValue}>
                   {metrics.averageGlucose !== null
-                    ? `${metrics.averageGlucose} mg/dL`
+                    ? `${metrics.averageGlucose.toFixed(2)} mg/dL`
                     : 'No readings'}
                 </Text>
               </View>
@@ -689,23 +691,23 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#007AFF',
   },
   a1cStatus: {
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 10,
+    marginTop: 2,
   },
   rangeText: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#666',
-    marginTop: 4,
+    marginTop: 2,
   },
   highValue: {
     color: '#FF3B30', // Red color for high values
@@ -762,8 +764,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   timestampText: {
-    fontSize: 10,
+    fontSize: 9,
     color: '#666',
-    marginTop: 4,
+    marginTop: 2,
   },
 });

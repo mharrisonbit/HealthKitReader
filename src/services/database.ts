@@ -64,10 +64,10 @@ export class DatabaseService {
     try {
       await this.db?.executeSql(`
         CREATE TABLE IF NOT EXISTS readings (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id TEXT PRIMARY KEY,
           value REAL NOT NULL,
           unit TEXT NOT NULL,
-          timestamp DATETIME NOT NULL,
+          timestamp TEXT NOT NULL,
           sourceName TEXT,
           notes TEXT
         );
@@ -90,32 +90,43 @@ export class DatabaseService {
       throw new Error('Database not initialized');
     }
 
-    const id = `${reading.timestamp.getTime()}_${Math.random()
-      .toString(36)
-      .substring(7)}_${reading.sourceName}`;
+    try {
+      const id = `${reading.timestamp.getTime()}_${Math.random()
+        .toString(36)
+        .substring(7)}_${reading.sourceName}`;
 
-    const newReading: BloodGlucose = {
-      ...reading,
-      id,
-    };
+      const newReading: BloodGlucose = {
+        ...reading,
+        id,
+      };
 
-    await this.db.transaction(tx => {
-      tx.executeSql(
-        `INSERT OR REPLACE INTO readings 
-        (id, value, unit, timestamp, sourceName, notes) 
-        VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          id,
-          reading.value,
-          reading.unit,
-          reading.timestamp.toISOString(),
-          reading.sourceName,
-          reading.notes || null,
-        ],
-      );
-    });
+      // Ensure all values are properly typed
+      const values = [
+        id,
+        Number(reading.value), // Ensure value is a number
+        reading.unit || 'mg/dL', // Ensure unit is either 'mg/dL' or 'mmol/L'
+        reading.timestamp.toISOString(), // Ensure timestamp is ISO string
+        reading.sourceName || 'Unknown', // Ensure sourceName is not null
+        reading.notes || null, // Allow notes to be null
+      ];
 
-    return newReading;
+      Logger.log('Adding reading with values:', values);
+
+      await this.db.transaction(tx => {
+        tx.executeSql(
+          `INSERT OR REPLACE INTO readings 
+          (id, value, unit, timestamp, sourceName, notes) 
+          VALUES (?, ?, ?, ?, ?, ?)`,
+          values,
+        );
+      });
+
+      Logger.log('Successfully added reading:', newReading);
+      return newReading;
+    } catch (error) {
+      Logger.error('Error adding reading:', error);
+      throw error;
+    }
   }
 
   async getAllReadings(): Promise<BloodGlucose[]> {
@@ -135,14 +146,15 @@ export class DatabaseService {
       const readings: BloodGlucose[] = [];
       for (let i = 0; i < results.rows.length; i++) {
         const row = results.rows.item(i);
-        readings.push({
-          id: row.id,
-          value: row.value,
-          unit: row.unit,
+        const reading: BloodGlucose = {
+          id: String(row.id),
+          value: Number(row.value),
+          unit: row.unit === 'mmol/L' ? 'mmol/L' : 'mg/dL', // Ensure unit is either 'mg/dL' or 'mmol/L'
           timestamp: new Date(row.timestamp),
-          sourceName: row.sourceName,
-          notes: row.notes,
-        });
+          sourceName: String(row.sourceName || 'Unknown'),
+          notes: row.notes ? String(row.notes) : undefined,
+        };
+        readings.push(reading);
       }
 
       Logger.log(`Processed ${readings.length} readings`);
@@ -224,7 +236,7 @@ export class DatabaseService {
       const row = results.rows.item(0);
       return {
         id: row.id,
-        value: row.value,
+        value: Number(row.value),
         unit: row.unit,
         timestamp: new Date(row.timestamp),
         sourceName: row.sourceName,
@@ -259,7 +271,7 @@ export class DatabaseService {
         const row = results.rows.item(i);
         readings.push({
           id: row.id,
-          value: row.value,
+          value: Number(row.value),
           unit: row.unit,
           timestamp: new Date(row.timestamp),
           sourceName: row.sourceName,

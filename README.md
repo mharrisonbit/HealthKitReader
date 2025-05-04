@@ -2,6 +2,23 @@
 
 A comprehensive React Native application for tracking and managing blood glucose readings. This app serves as both a standalone tracking tool and an integration point with Apple HealthKit for iOS.
 
+## About This Project
+
+This application was entirely developed using AI assistance through Cursor IDE. The development process involved:
+
+- AI-powered code generation and implementation
+- AI-assisted debugging and error resolution
+- AI-guided architectural decisions
+- AI-driven documentation and README creation
+
+The use of AI in development has enabled:
+
+- Rapid prototyping and iteration
+- Consistent code quality and style
+- Comprehensive error handling
+- Efficient implementation of complex features
+- Detailed documentation and comments
+
 ## Features
 
 - Track blood glucose readings
@@ -24,31 +41,23 @@ A comprehensive React Native application for tracking and managing blood glucose
 
 ### Added Features
 
-- **Enhanced Chart View**
-
-  - Time range selection for viewing readings (1 hour, 3 hours, 6 hours, 12 hours)
-  - Chronological display with oldest readings on the left and newest on the right
-  - Simplified time labels showing only start and end times
-  - Improved readability with cleaner x-axis
-
-- **Improved Data Synchronization**
-  - Added automatic sync check every 12 hours
-  - Implemented user prompts for syncing with HealthKit
-  - Enhanced sync feedback and error handling
+- **Enhanced Logging System**
+  - Development-only logging in debug mode
+  - Automatic logging suppression in production
+  - Improved error tracking and debugging
+  - Better performance in production builds
 
 ### Modified Features
 
 - **Data Retrieval**
 
-  - Limited HealthKit data retrieval to the last year of readings
   - Optimized database queries for better performance
-  - Removed development console logs for release mode compatibility
   - Improved filtering of readings based on selected time range
+  - Enhanced error handling and logging
 
 - **Home Screen**
-  - Enhanced metric calculations to respect selected time range
+  - Enhanced metric calculations
   - Improved performance by removing redundant calculations
-  - Fixed infinite loop issues in data processing
   - Added proper error handling for calculations
 
 ## Core Functionality
@@ -64,7 +73,7 @@ A comprehensive React Native application for tracking and managing blood glucose
 
 - **Health Platform Integration**
   - Seamless connection with Apple HealthKit
-  - Import existing blood glucose readings (limited to last year)
+  - Import existing blood glucose readings
   - Write new readings back to HealthKit
   - Automatic background synchronization
   - Permission management for health data access
@@ -72,7 +81,6 @@ A comprehensive React Native application for tracking and managing blood glucose
 ### 2. Data Visualization
 
 - **List View**
-
   - Chronological display of all readings
   - Detailed entry information:
     - Blood glucose value
@@ -81,17 +89,6 @@ A comprehensive React Native application for tracking and managing blood glucose
     - Visual indicators for high/low readings
   - Color-coded entries based on glucose ranges
   - Support for entry deletion
-
-- **Chart View**
-  - Interactive line chart for trend analysis
-  - Time range selection (1h, 3h, 6h, 12h)
-  - Chronological display (oldest to newest)
-  - Simplified time labels (start and end times only)
-  - Real-time average calculation
-  - Visual elements:
-    - Individual reading points
-    - High/low range indicators
-    - Trend lines
 
 ### 3. Customization Features
 
@@ -210,14 +207,14 @@ src/
 │   ├── HomeScreen.tsx
 │   ├── SettingsScreen.tsx
 │   ├── AddBloodGlucoseScreen.tsx
-│   ├── BloodGlucoseListScreen.tsx
-│   └── BloodGlucoseChartScreen.tsx
+│   └── BloodGlucoseListScreen.tsx
 ├── services/         # Business logic
 │   ├── database.ts   # SQLite operations
 │   └── healthService.ts  # HealthKit integration
 ├── types/           # TypeScript definitions
 │   └── BloodGlucose.ts
-└── components/      # Reusable UI components
+└── utils/          # Utility functions
+    └── logger.ts   # Logging utility
 ```
 
 ## Troubleshooting

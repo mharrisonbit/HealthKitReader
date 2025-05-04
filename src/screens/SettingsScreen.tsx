@@ -145,6 +145,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
       const healthService = HealthService.getInstance();
       const settingsService = SettingsService.getInstance();
 
+      // Check and request HealthKit permissions
+      const hasPermission = await healthService.hasHealthKitPermission();
+      if (!hasPermission) {
+        const granted = await healthService.requestHealthKitPermission();
+        if (!granted) {
+          Alert.alert(
+            'Permission Required',
+            'Please grant HealthKit permissions to import data.',
+          );
+          return;
+        }
+      }
+
+      // Initialize HealthKit
+      await healthService.initialize();
+
       // Get the last sync time from settings
       const lastSync = await settingsService.getLastSyncTime();
       const endDate = new Date();
@@ -158,11 +174,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
           : oneYearAgo
         : oneYearAgo;
 
+      Logger.log('Starting import from HealthKit...');
+      Logger.log(
+        `Import date range: ${startDate.toISOString()} to ${endDate.toISOString()}`,
+      );
+
+      // Get the oldest available reading date from HealthKit
+      const oldestDate = await healthService.getOldestBloodGlucoseDate();
+      if (oldestDate) {
+        Logger.log(
+          `Oldest available reading date: ${oldestDate.toISOString()}`,
+        );
+        // Use the older of the two dates
+        startDate.setTime(Math.min(startDate.getTime(), oldestDate.getTime()));
+        Logger.log(
+          `Adjusted start date: ${startDate.toISOString()} to ${endDate.toISOString()}`,
+        );
+      }
+
       const {healthKit, googleFit} =
         await healthService.getAllBloodGlucoseReadings(startDate, endDate);
 
+      Logger.log(`Retrieved ${healthKit.length} readings from HealthKit`);
+      Logger.log(`Retrieved ${googleFit.length} readings from Google Fit`);
+
       // Get existing readings from our database
       const existingReadings = await databaseService.getAllReadings();
+      Logger.log(
+        `Found ${existingReadings.length} existing readings in database`,
+      );
 
       // Create a map of existing readings for quick lookup
       const existingReadingsMap = new Map(
@@ -190,13 +230,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         }
 
         // Only import if we don't already have this reading
-        await databaseService.addReading({
-          value: reading.value,
-          unit: 'mg/dL',
+        const newReading = {
+          value: Math.round(Number(reading.value)),
+          unit: 'mg/dL' as const,
           timestamp: new Date(reading.startDate),
           sourceName: 'Apple Health',
           notes: 'Imported from Apple Health',
-        });
+        };
+
+        Logger.log('Adding reading to database:', newReading);
+        await databaseService.addReading(newReading);
         importedCount++;
       }
 
@@ -213,18 +256,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         }
 
         // Only import if we don't already have this reading
-        await databaseService.addReading({
-          value: reading.value,
-          unit: 'mg/dL',
+        const newReading = {
+          value: Math.round(Number(reading.value)),
+          unit: 'mg/dL' as const,
           timestamp: new Date(reading.date),
           sourceName: reading.sourceName || 'Google Fit',
           notes: `Imported from ${reading.sourceName || 'Google Fit'}`,
-        });
+        };
+
+        Logger.log('Adding reading to database:', newReading);
+        await databaseService.addReading(newReading);
         importedCount++;
       }
 
       // Update the last sync time
       await settingsService.updateLastSyncTime();
+
+      Logger.log(
+        `Import complete: ${importedCount} new readings, ${duplicateCount} duplicates`,
+      );
 
       Alert.alert(
         'Import Complete',
@@ -232,7 +282,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
       );
     } catch (error) {
       Logger.error('Error importing readings:', error);
-      Alert.alert('Error', 'Failed to import readings');
+      Alert.alert(
+        'Error',
+        'Failed to import readings. Please check the logs for details.',
+      );
     } finally {
       setIsImporting(false);
     }
