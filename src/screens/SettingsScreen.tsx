@@ -142,9 +142,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     try {
       setIsImporting(true);
       const healthService = HealthService.getInstance();
+      const settingsService = SettingsService.getInstance();
+
+      // Get the last sync time from settings
+      const lastSync = await settingsService.getLastSyncTime();
       const endDate = new Date();
-      const startDate = new Date();
-      startDate.setFullYear(startDate.getFullYear() - 1); // Get last year of data
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+      // Use the more recent of last sync or one year ago
+      const startDate = lastSync
+        ? lastSync > oneYearAgo
+          ? lastSync
+          : oneYearAgo
+        : oneYearAgo;
 
       const {healthKit, googleFit} =
         await healthService.getAllBloodGlucoseReadings(startDate, endDate);
@@ -210,6 +221,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         });
         importedCount++;
       }
+
+      // Update the last sync time
+      await settingsService.updateLastSyncTime();
 
       Alert.alert(
         'Import Complete',
