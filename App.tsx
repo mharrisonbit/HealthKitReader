@@ -15,6 +15,7 @@ import {SettingsScreen} from './src/screens/SettingsScreen';
 import {AddBloodGlucoseScreen} from './src/screens/AddBloodGlucoseScreen';
 import {BloodGlucoseListScreen} from './src/screens/BloodGlucoseListScreen';
 import {BloodGlucoseChartScreen} from './src/screens/BloodGlucoseChartScreen';
+import {ComparisonScreen} from './src/screens/ComparisonScreen';
 import {BloodGlucose} from './src/types/BloodGlucose';
 import {Text} from 'react-native';
 import {DatabaseService} from './src/services/database';
@@ -34,6 +35,7 @@ export type RootStackParamList = {
     onSave: (data: Omit<BloodGlucose, 'id'>) => void;
   };
   Charts: undefined;
+  Comparison: undefined;
 };
 
 const Tab = createBottomTabNavigator();
@@ -77,6 +79,16 @@ const ChartsStack = () => (
       name="Charts"
       component={BloodGlucoseChartScreen}
       options={{title: 'Charts'}}
+    />
+  </Stack.Navigator>
+);
+
+const ComparisonStack = () => (
+  <Stack.Navigator>
+    <Stack.Screen
+      name="Comparison"
+      component={ComparisonScreen}
+      options={{title: 'Compare Time Ranges'}}
     />
   </Stack.Navigator>
 );
@@ -167,12 +179,22 @@ function App(): React.JSX.Element {
             }}
           />
           <Tab.Screen
+            name="ComparisonTab"
+            component={ComparisonStack}
+            options={{
+              title: 'Compare',
+              tabBarIcon: ({color}: {color: string}) => (
+                <Text style={{color, fontSize: 24}}>📊</Text>
+              ),
+            }}
+          />
+          <Tab.Screen
             name="ChartsTab"
             component={ChartsStack}
             options={{
               title: 'Charts',
               tabBarIcon: ({color}: {color: string}) => (
-                <Text style={{color, fontSize: 24}}>📊</Text>
+                <Text style={{color, fontSize: 24}}>📈</Text>
               ),
             }}
           />

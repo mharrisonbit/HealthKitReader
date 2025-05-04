@@ -18,6 +18,7 @@ import {RootStackParamList} from '../types/navigation';
 import {SettingsService} from '../services/settingsService';
 import {DatabaseService} from '../services/database';
 import {HealthService} from '../services/healthService';
+import Logger from '../utils/logger';
 
 type SettingsScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Settings'>;
@@ -65,7 +66,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
           : savedRanges.high,
       });
     } catch (error) {
-      console.error('Error loading settings:', error);
+      Logger.error('Error loading settings:', error);
     }
   };
 
@@ -82,7 +83,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
       setTempRanges(selectedRange);
       Alert.alert('Success', 'Ranges updated successfully');
     } catch (error) {
-      console.error('Error saving ranges:', error);
+      Logger.error('Error saving ranges:', error);
       Alert.alert('Error', 'Failed to save ranges');
     }
   };
@@ -98,7 +99,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         useCustomRanges: !prev.useCustomRanges,
       }));
     } catch (error) {
-      console.error('Error toggling custom ranges:', error);
+      Logger.error('Error toggling custom ranges:', error);
       Alert.alert('Error', 'Failed to update settings');
     }
   };
@@ -123,7 +124,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
                 {text: 'OK'},
               ]);
             } catch (error) {
-              console.error('Error resetting database:', error);
+              Logger.error('Error resetting database:', error);
               Alert.alert(
                 'Error',
                 'Failed to reset database. Please try again.',
@@ -142,15 +143,72 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
     try {
       setIsImporting(true);
       const healthService = HealthService.getInstance();
+      const settingsService = SettingsService.getInstance();
+
+      // Check and request HealthKit permissions
+      const hasPermission = await healthService.hasHealthKitPermission();
+      if (!hasPermission) {
+        const granted = await healthService.requestHealthKitPermission();
+        if (!granted) {
+          Alert.alert(
+            'Permission Required',
+            'Please grant HealthKit permissions to import data.',
+          );
+          return;
+        }
+      }
+
+      // Initialize HealthKit
+      await healthService.initialize();
+
+      // Get the last sync time from settings
+      const lastSync = await settingsService.getLastSyncTime();
       const endDate = new Date();
-      const startDate = new Date();
-      startDate.setFullYear(startDate.getFullYear() - 1); // Get last year of data
+
+      // If we have a last sync time, use it as the start date
+      // Otherwise, get the oldest available reading date from HealthKit
+      let startDate: Date;
+      if (lastSync) {
+        startDate = lastSync;
+        Logger.log(
+          'Using last sync time as start date:',
+          startDate.toISOString(),
+        );
+      } else {
+        const oldestDate = await healthService.getOldestBloodGlucoseDate();
+        if (oldestDate) {
+          startDate = oldestDate;
+          Logger.log(
+            'Using oldest available reading date:',
+            startDate.toISOString(),
+          );
+        } else {
+          // If no last sync and no oldest date, default to one year ago
+          startDate = new Date();
+          startDate.setFullYear(startDate.getFullYear() - 1);
+          Logger.log(
+            'Using default one year ago as start date:',
+            startDate.toISOString(),
+          );
+        }
+      }
+
+      Logger.log('Starting import from HealthKit...');
+      Logger.log(
+        `Import date range: ${startDate.toISOString()} to ${endDate.toISOString()}`,
+      );
 
       const {healthKit, googleFit} =
         await healthService.getAllBloodGlucoseReadings(startDate, endDate);
 
+      Logger.log(`Retrieved ${healthKit.length} readings from HealthKit`);
+      Logger.log(`Retrieved ${googleFit.length} readings from Google Fit`);
+
       // Get existing readings from our database
       const existingReadings = await databaseService.getAllReadings();
+      Logger.log(
+        `Found ${existingReadings.length} existing readings in database`,
+      );
 
       // Create a map of existing readings for quick lookup
       const existingReadingsMap = new Map(
@@ -178,13 +236,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         }
 
         // Only import if we don't already have this reading
-        await databaseService.addReading({
-          value: reading.value,
-          unit: 'mg/dL',
+        const newReading = {
+          value: Math.round(Number(reading.value)),
+          unit: 'mg/dL' as const,
           timestamp: new Date(reading.startDate),
           sourceName: 'Apple Health',
           notes: 'Imported from Apple Health',
-        });
+        };
+
+        Logger.log('Adding reading to database:', newReading);
+        await databaseService.addReading(newReading);
         importedCount++;
       }
 
@@ -201,23 +262,36 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = () => {
         }
 
         // Only import if we don't already have this reading
-        await databaseService.addReading({
-          value: reading.value,
-          unit: 'mg/dL',
+        const newReading = {
+          value: Math.round(Number(reading.value)),
+          unit: 'mg/dL' as const,
           timestamp: new Date(reading.date),
           sourceName: reading.sourceName || 'Google Fit',
           notes: `Imported from ${reading.sourceName || 'Google Fit'}`,
-        });
+        };
+
+        Logger.log('Adding reading to database:', newReading);
+        await databaseService.addReading(newReading);
         importedCount++;
       }
+
+      // Update the last sync time
+      await settingsService.updateLastSyncTime();
+
+      Logger.log(
+        `Import complete: ${importedCount} new readings, ${duplicateCount} duplicates`,
+      );
 
       Alert.alert(
         'Import Complete',
         `Successfully imported ${importedCount} new readings\n${duplicateCount} duplicates were skipped`,
       );
     } catch (error) {
-      console.error('Error importing readings:', error);
-      Alert.alert('Error', 'Failed to import readings');
+      Logger.error('Error importing readings:', error);
+      Alert.alert(
+        'Error',
+        'Failed to import readings. Please check the logs for details.',
+      );
     } finally {
       setIsImporting(false);
     }
