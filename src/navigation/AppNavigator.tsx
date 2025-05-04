@@ -1,26 +1,72 @@
 import React from 'react';
+import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {NavigationContainer} from '@react-navigation/native';
-import {createNativeStackNavigator} from '@react-navigation/native-stack';
-import {HomeScreen} from '../screens/HomeScreen';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import {SettingsScreen} from '../screens/SettingsScreen';
+import {ReadingsScreen} from '../screens/ReadingsScreen';
+import {ChartsScreen} from '../screens/ChartsScreen';
+import {ComparisonScreen} from '../screens/ComparisonScreen';
 
-const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
-export const AppNavigator = () => {
+const AppNavigator = () => {
   return (
     <NavigationContainer>
-      <Stack.Navigator>
-        <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{title: 'Blood Glucose Tracker'}}
+      <Tab.Navigator
+        screenOptions={{
+          tabBarActiveTintColor: '#2196F3',
+          tabBarInactiveTintColor: '#666666',
+          headerStyle: {
+            backgroundColor: '#2196F3',
+          },
+          headerTintColor: '#FFFFFF',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+        }}>
+        <Tab.Screen
+          name="Readings"
+          component={ReadingsScreen}
+          options={{
+            title: 'Readings',
+            tabBarIcon: ({color, size}) => (
+              <Icon name="list" size={size} color={color} />
+            ),
+          }}
         />
-        <Stack.Screen
+        <Tab.Screen
+          name="Comparison"
+          component={ComparisonScreen}
+          options={{
+            title: 'Compare',
+            tabBarIcon: ({color, size}) => (
+              <Icon name="compare" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Charts"
+          component={ChartsScreen}
+          options={{
+            title: 'Charts',
+            tabBarIcon: ({color, size}) => (
+              <Icon name="show-chart" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen
           name="Settings"
           component={SettingsScreen}
-          options={{title: 'Settings'}}
+          options={{
+            title: 'Settings',
+            tabBarIcon: ({color, size}) => (
+              <Icon name="settings" size={size} color={color} />
+            ),
+          }}
         />
-      </Stack.Navigator>
+      </Tab.Navigator>
     </NavigationContainer>
   );
 };
+
+export default AppNavigator;
